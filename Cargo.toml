@@ -1,0 +1,18 @@
+[package]
+name = "wooting-hack"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Rust CLI experiments for Wooting RGB keyboards"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+ctrlc = "3.5"
+libloading = "0.8"
+thiserror = "2.0"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
