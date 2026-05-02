@@ -33,7 +33,6 @@ type Close = unsafe extern "C" fn() -> bool;
 type DirectSetKey = unsafe extern "C" fn(u8, u8, u8, u8, u8) -> bool;
 type ArrayUpdateKeyboard = unsafe extern "C" fn() -> bool;
 type ArrayAutoUpdate = unsafe extern "C" fn(bool);
-type ArraySetSingle = unsafe extern "C" fn(u8, u8, u8, u8, u8) -> bool;
 type ArraySetFull = unsafe extern "C" fn(*const u8) -> bool;
 type DeviceInfo = unsafe extern "C" fn() -> *const WootingUsbMetaRaw;
 type DeviceLayout = unsafe extern "C" fn() -> i32;
@@ -45,7 +44,6 @@ pub struct RgbSdk {
     direct_set_key: DirectSetKey,
     array_update_keyboard: ArrayUpdateKeyboard,
     array_auto_update: ArrayAutoUpdate,
-    array_set_single: ArraySetSingle,
     array_set_full: ArraySetFull,
     device_info: DeviceInfo,
     device_layout: DeviceLayout,
@@ -74,7 +72,6 @@ impl RgbSdk {
         let direct_set_key = load_symbol(&library, b"wooting_rgb_direct_set_key\0")?;
         let array_update_keyboard = load_symbol(&library, b"wooting_rgb_array_update_keyboard\0")?;
         let array_auto_update = load_symbol(&library, b"wooting_rgb_array_auto_update\0")?;
-        let array_set_single = load_symbol(&library, b"wooting_rgb_array_set_single\0")?;
         let array_set_full = load_symbol(&library, b"wooting_rgb_array_set_full\0")?;
         let device_info = load_symbol(&library, b"wooting_rgb_device_info\0")?;
         let device_layout = load_symbol(&library, b"wooting_rgb_device_layout\0")?;
@@ -86,7 +83,6 @@ impl RgbSdk {
             direct_set_key,
             array_update_keyboard,
             array_auto_update,
-            array_set_single,
             array_set_full,
             device_info,
             device_layout,
@@ -118,12 +114,6 @@ impl RgbSdk {
     pub fn array_auto_update(&self, auto_update: bool) {
         // SAFETY: See `kbd_connected`.
         unsafe { (self.array_auto_update)(auto_update) }
-    }
-
-    pub fn array_set_single(&self, row: u8, column: u8, red: u8, green: u8, blue: u8) -> bool {
-        // SAFETY: See `kbd_connected`. Scalar arguments are range-checked by
-        // the safe wrapper before this is called.
-        unsafe { (self.array_set_single)(row, column, red, green, blue) }
     }
 
     pub fn array_set_full(&self, colors: &[u8]) -> bool {

@@ -98,18 +98,6 @@ impl WootingRgb {
         }
     }
 
-    pub fn set_cell(&self, row: u8, column: u8, color: Color) -> Result<(), WootingError> {
-        self.check_bounds(row, column)?;
-        if self
-            .sdk
-            .array_set_single(row, column, color.red, color.green, color.blue)
-        {
-            Ok(())
-        } else {
-            Err(WootingError::SdkCall("wooting_rgb_array_set_single"))
-        }
-    }
-
     pub fn set_frame(&self, frame: &Frame) -> Result<(), WootingError> {
         if self.sdk.array_set_full(frame.as_bytes()) {
             Ok(())

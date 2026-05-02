@@ -1,14 +1,19 @@
+mod config;
 mod effects;
 mod ffi;
+mod layout;
+mod runner;
 mod wooting;
 
 use clap::{Parser, Subcommand};
-use effects::{Color, rainbow, row_test};
+use config::AppConfig;
+use effects::{Color, EffectKind, PaletteName};
+use layout::KeyboardLayout;
+use runner::{RunOptions, run_effect, sleep_interruptibly};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use wooting::{DeviceInfo, WootingRgb};
 
 #[derive(Debug, Parser)]
@@ -26,10 +31,12 @@ struct Cli {
 enum Command {
     /// Print connected keyboard metadata.
     Info,
-    /// Paint a short, low-brightness row test pattern, then reset.
+    /// Print the inferred keyboard layout summary.
+    LayoutInfo,
+    /// Paint a short row test pattern, then reset.
     Test {
-        /// Maximum RGB channel value. Keep low while experimenting.
-        #[arg(long, default_value_t = 16)]
+        /// Maximum RGB channel value.
+        #[arg(long, default_value_t = 96)]
         brightness: u8,
         /// Seconds to keep the pattern visible.
         #[arg(long, default_value_t = 3)]
@@ -43,8 +50,8 @@ enum Command {
         /// Matrix column to light.
         #[arg(long, default_value_t = 0)]
         column: u8,
-        /// Maximum RGB channel value. Keep low while experimenting.
-        #[arg(long, default_value_t = 16)]
+        /// Maximum RGB channel value.
+        #[arg(long, default_value_t = 96)]
         brightness: u8,
         /// Seconds to keep the key visible.
         #[arg(long, default_value_t = 3)]
@@ -52,8 +59,8 @@ enum Command {
     },
     /// Run a device-bounded rainbow animation, then reset.
     Rainbow {
-        /// Maximum RGB channel value. Keep low while experimenting.
-        #[arg(long, default_value_t = 24)]
+        /// Maximum RGB channel value.
+        #[arg(long, default_value_t = 128)]
         brightness: u8,
         /// Seconds to run the animation.
         #[arg(long, default_value_t = 10)]
@@ -61,6 +68,33 @@ enum Command {
         /// Animation frames per second.
         #[arg(long, default_value_t = 30)]
         fps: u32,
+    },
+    /// Run any named effect.
+    Effect {
+        /// Effect to run.
+        #[arg(value_enum)]
+        effect: EffectKind,
+        /// Palette for palette-aware effects.
+        #[arg(long, value_enum, default_value_t = PaletteName::Wooting)]
+        palette: PaletteName,
+        /// Maximum RGB channel value.
+        #[arg(long, default_value_t = 128)]
+        brightness: u8,
+        /// Seconds to run the effect.
+        #[arg(long, default_value_t = 10)]
+        seconds: u64,
+        /// Animation frames per second.
+        #[arg(long, default_value_t = 30)]
+        fps: u32,
+    },
+    /// Run a TOML profile.
+    Run {
+        /// Config file path.
+        #[arg(long)]
+        config: PathBuf,
+        /// Print resolved config without touching the keyboard.
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -73,18 +107,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let keyboard = WootingRgb::open(cli.sdk_path.as_deref())?;
             print_info(keyboard.info());
         }
+        Command::LayoutInfo => {
+            let keyboard = WootingRgb::open(cli.sdk_path.as_deref())?;
+            print_info(keyboard.info());
+            let layout = KeyboardLayout::for_device(keyboard.info());
+            println!("layout: {}", layout.summary());
+        }
         Command::Test {
             brightness,
             seconds,
         } => {
-            let mut keyboard = WootingRgb::open(cli.sdk_path.as_deref())?;
-            print_info(keyboard.info());
-            let frame = row_test(keyboard.info(), brightness);
-            keyboard.set_frame(&frame)?;
-            keyboard.set_cell(0, 0, Color::new(brightness, brightness, brightness))?;
-            keyboard.update()?;
-            sleep_interruptibly(Duration::from_secs(seconds), &interrupted);
-            close_best_effort(&mut keyboard);
+            let options = RunOptions {
+                effect: EffectKind::RowTest,
+                brightness,
+                seconds: Some(seconds),
+                ..RunOptions::default()
+            };
+            run_keyboard(cli.sdk_path, &options, &interrupted)?;
         }
         Command::Direct {
             row,
@@ -96,29 +135,103 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             print_info(keyboard.info());
             keyboard.direct_set_key(row, column, Color::new(brightness, brightness, brightness))?;
             sleep_interruptibly(Duration::from_secs(seconds), &interrupted);
-            close_best_effort(&mut keyboard);
+            close_best_effort(&mut keyboard, true);
         }
         Command::Rainbow {
             brightness,
             seconds,
             fps,
         } => {
-            let mut keyboard = WootingRgb::open(cli.sdk_path.as_deref())?;
-            print_info(keyboard.info());
-            run_rainbow(&keyboard, brightness, seconds, fps.max(1), &interrupted)?;
-            close_best_effort(&mut keyboard);
+            let options = RunOptions {
+                effect: EffectKind::Rainbow,
+                brightness,
+                seconds: Some(seconds),
+                fps,
+                ..RunOptions::default()
+            };
+            run_keyboard(cli.sdk_path, &options, &interrupted)?;
+        }
+        Command::Effect {
+            effect,
+            palette,
+            brightness,
+            seconds,
+            fps,
+        } => {
+            let options = RunOptions {
+                effect,
+                palette,
+                brightness,
+                seconds: Some(seconds),
+                fps,
+                continuous: false,
+            };
+            run_keyboard(cli.sdk_path, &options, &interrupted)?;
+        }
+        Command::Run { config, dry_run } => {
+            let config = AppConfig::load(&config)?;
+            print_config(&config);
+            if !dry_run {
+                let sdk_path = cli.sdk_path.or(config.sdk_path.clone());
+                run_keyboard_with_close_policy(
+                    sdk_path,
+                    &config.run_options(),
+                    config.warn_on_close_error,
+                    &interrupted,
+                )?;
+            }
         }
     }
 
     Ok(())
 }
 
-fn close_best_effort(keyboard: &mut WootingRgb) {
-    if let Err(error) = keyboard.close() {
+fn run_keyboard(
+    sdk_path: Option<PathBuf>,
+    options: &RunOptions,
+    interrupted: &AtomicBool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    run_keyboard_with_close_policy(sdk_path, options, true, interrupted)
+}
+
+fn run_keyboard_with_close_policy(
+    sdk_path: Option<PathBuf>,
+    options: &RunOptions,
+    warn_on_close_error: bool,
+    interrupted: &AtomicBool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut keyboard = WootingRgb::open(sdk_path.as_deref())?;
+    print_info(keyboard.info());
+    run_effect(&keyboard, options, interrupted)?;
+    close_best_effort(&mut keyboard, warn_on_close_error);
+    Ok(())
+}
+
+fn close_best_effort(keyboard: &mut WootingRgb, warn: bool) {
+    if let Err(error) = keyboard.close()
+        && warn
+    {
         eprintln!(
             "warning: {error}; SDK close/reset was not acknowledged, but the handle was closed"
         );
     }
+}
+
+fn print_config(config: &AppConfig) {
+    println!("config:");
+    println!("  sdk_path: {}", path_display(config.sdk_path.as_ref()));
+    println!("  effect: {}", config.effect);
+    println!("  palette: {}", config.palette);
+    println!("  brightness: {}", config.brightness);
+    println!("  fps: {}", config.fps);
+    println!("  seconds: {:?}", config.seconds);
+    println!("  continuous: {}", config.continuous);
+    println!("  warn_on_close_error: {}", config.warn_on_close_error);
+}
+
+fn path_display(path: Option<&PathBuf>) -> String {
+    path.map(|path| path.display().to_string())
+        .unwrap_or_else(|| "<auto>".to_string())
 }
 
 fn print_info(info: &DeviceInfo) {
@@ -134,40 +247,6 @@ fn print_info(info: &DeviceInfo) {
     println!("v2_interface: {}", info.v2_interface);
     println!("uses_small_packets: {}", info.uses_small_packets);
     println!("uses_multi_report: {}", info.uses_multi_report);
-}
-
-fn run_rainbow(
-    keyboard: &WootingRgb,
-    brightness: u8,
-    seconds: u64,
-    fps: u32,
-    interrupted: &AtomicBool,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let frame_time = Duration::from_secs_f64(1.0 / f64::from(fps));
-    let deadline = Instant::now() + Duration::from_secs(seconds);
-    let mut tick = 0;
-
-    while Instant::now() < deadline && !interrupted.load(Ordering::SeqCst) {
-        let started = Instant::now();
-        let frame = rainbow(keyboard.info(), brightness, tick);
-        keyboard.set_frame(&frame)?;
-        keyboard.update()?;
-        tick += 1;
-
-        if let Some(remaining) = frame_time.checked_sub(started.elapsed()) {
-            sleep_interruptibly(remaining, interrupted);
-        }
-    }
-
-    Ok(())
-}
-
-fn sleep_interruptibly(duration: Duration, interrupted: &AtomicBool) {
-    let deadline = Instant::now() + duration;
-    while Instant::now() < deadline && !interrupted.load(Ordering::SeqCst) {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        thread::sleep(remaining.min(Duration::from_millis(25)));
-    }
 }
 
 fn install_ctrlc_handler() -> Result<Arc<AtomicBool>, ctrlc::Error> {
