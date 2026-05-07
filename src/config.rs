@@ -1,5 +1,7 @@
-use crate::effects::{EffectKind, PaletteName};
-use crate::runner::RunOptions;
+use crate::effects::EffectKind;
+use crate::extensions::ExtensionConfig;
+use crate::render::PaletteName;
+use crate::runner::{ExtensionRunOptions, RunOptions};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
@@ -14,6 +16,7 @@ pub struct AppConfig {
     pub seconds: Option<u64>,
     pub continuous: bool,
     pub warn_on_close_error: bool,
+    pub extension: Option<ExtensionConfig>,
 }
 
 impl Default for AppConfig {
@@ -28,6 +31,7 @@ impl Default for AppConfig {
             seconds: run.seconds,
             continuous: false,
             warn_on_close_error: true,
+            extension: None,
         }
     }
 }
@@ -41,15 +45,20 @@ impl AppConfig {
         toml::from_str(&content).map_err(ConfigError::Parse)
     }
 
-    pub fn run_options(&self) -> RunOptions {
-        RunOptions {
-            effect: self.effect,
+    pub fn extension_run_options(&self) -> ExtensionRunOptions {
+        ExtensionRunOptions {
             palette: self.palette,
             brightness: self.brightness,
             fps: self.fps,
             seconds: self.seconds,
             continuous: self.continuous,
         }
+    }
+
+    pub fn extension_config(&self) -> ExtensionConfig {
+        self.extension
+            .clone()
+            .unwrap_or_else(|| ExtensionConfig::static_effect(self.effect))
     }
 }
 

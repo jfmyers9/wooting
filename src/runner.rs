@@ -1,6 +1,8 @@
-use crate::effects::{EffectKind, PaletteName, RenderContext};
+use crate::effects::EffectKind;
+use crate::extensions::{KeyboardExtension, StaticEffectExtension};
 use crate::layout::KeyboardLayout;
-use crate::wooting::WootingRgb;
+use crate::render::{PaletteName, RenderContext};
+use crate::sdk::rgb::WootingRgb;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -28,9 +30,58 @@ impl Default for RunOptions {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ExtensionRunOptions {
+    pub palette: PaletteName,
+    pub brightness: u8,
+    pub fps: u32,
+    pub seconds: Option<u64>,
+    pub continuous: bool,
+}
+
+impl Default for ExtensionRunOptions {
+    fn default() -> Self {
+        let run = RunOptions::default();
+        Self {
+            palette: run.palette,
+            brightness: run.brightness,
+            fps: run.fps,
+            seconds: run.seconds,
+            continuous: run.continuous,
+        }
+    }
+}
+
+impl From<&RunOptions> for ExtensionRunOptions {
+    fn from(options: &RunOptions) -> Self {
+        Self {
+            palette: options.palette,
+            brightness: options.brightness,
+            fps: options.fps,
+            seconds: options.seconds,
+            continuous: options.continuous,
+        }
+    }
+}
+
 pub fn run_effect(
     keyboard: &WootingRgb,
     options: &RunOptions,
+    interrupted: &AtomicBool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut extension = StaticEffectExtension::new(options.effect);
+    run_extension(
+        keyboard,
+        &ExtensionRunOptions::from(options),
+        &mut extension,
+        interrupted,
+    )
+}
+
+pub fn run_extension(
+    keyboard: &WootingRgb,
+    options: &ExtensionRunOptions,
+    extension: &mut dyn KeyboardExtension,
     interrupted: &AtomicBool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let fps = options.fps.max(1);
@@ -43,10 +94,12 @@ pub fn run_effect(
     let mut tick = 0;
 
     while !interrupted.load(Ordering::SeqCst)
+        && !extension.finished()
         && deadline.is_none_or(|deadline| Instant::now() < deadline)
     {
         let started = Instant::now();
-        let frame = options.effect.render(&RenderContext {
+        extension.tick(interrupted);
+        let frame = extension.render(&RenderContext {
             info: keyboard.info(),
             layout: &layout,
             brightness: options.brightness,
@@ -62,6 +115,7 @@ pub fn run_effect(
         }
     }
 
+    extension.shutdown(interrupted.load(Ordering::SeqCst));
     Ok(())
 }
 

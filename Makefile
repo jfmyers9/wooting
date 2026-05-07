@@ -1,4 +1,4 @@
-.PHONY: check fmt clippy test run-info run-test run-effect config-dry-run install-dry-run uninstall-dry-run
+.PHONY: check fmt clippy test run-info run-test run-effect run-command-pulse config-dry-run command-pulse-dry-run install-dry-run uninstall-dry-run
 
 check: fmt clippy test
 
@@ -20,8 +20,14 @@ run-test:
 run-effect:
 	cargo run -- effect comet --palette cyberpunk --brightness 128 --seconds 10 --fps 30
 
+run-command-pulse:
+	cargo run -- extension run command-pulse -- make check
+
 config-dry-run:
-	cargo run -- run --config examples/wooting-hack.toml --dry-run
+	cargo run -- run --config examples/wooting-extension.toml --dry-run
+
+command-pulse-dry-run:
+	cargo run -- run --config examples/command-pulse.toml --dry-run
 
 install-dry-run:
 	scripts/install-macos.sh

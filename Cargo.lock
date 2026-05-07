@@ -404,7 +404,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ee1708bef14716a11bae175f579062d4554d95be2c6829f518df847b7b3fdd0"
 
 [[package]]
-name = "wooting-hack"
+name = "wooting-extension"
 version = "0.1.0"
 dependencies = [
  "clap",

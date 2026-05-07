@@ -1,0 +1,17 @@
+# Example Command Pulse extension profile.
+# Runs `make check`, shows progress, then success/failure/timeout status.
+
+palette = "wooting"
+brightness = 128
+fps = 30
+seconds = 0
+continuous = true
+warn_on_close_error = true
+
+[extension]
+kind = "command-pulse"
+command = ["make", "check"]
+timeout_seconds = 600
+success_hold_seconds = 3
+failure_hold_seconds = 6
+interrupted_hold_seconds = 2

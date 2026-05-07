@@ -1,6 +1,6 @@
 use libloading::Library;
 use std::env;
-use std::ffi::{CStr, c_char};
+use std::ffi::{c_char, CStr};
 use std::path::{Path, PathBuf};
 
 #[repr(C)]

@@ -1,4 +1,4 @@
-use crate::wooting::{DeviceInfo, DeviceType};
+use crate::sdk::rgb::{DeviceInfo, DeviceType};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MatrixCoord {

@@ -1,20 +1,23 @@
 mod config;
 mod effects;
-mod ffi;
+mod extensions;
 mod layout;
+mod render;
 mod runner;
-mod wooting;
+mod sdk;
 
 use clap::{Parser, Subcommand};
 use config::AppConfig;
-use effects::{Color, EffectKind, PaletteName};
+use effects::EffectKind;
+use extensions::{CommandPulseConfig, ExtensionKind, build_extension};
 use layout::KeyboardLayout;
-use runner::{RunOptions, run_effect, sleep_interruptibly};
+use render::{Color, PaletteName};
+use runner::{ExtensionRunOptions, RunOptions, run_effect, run_extension, sleep_interruptibly};
+use sdk::rgb::{DeviceInfo, WootingRgb};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use wooting::{DeviceInfo, WootingRgb};
 
 #[derive(Debug, Parser)]
 #[command(author, version, about)]
@@ -69,7 +72,7 @@ enum Command {
         #[arg(long, default_value_t = 30)]
         fps: u32,
     },
-    /// Run any named effect.
+    /// Run any named RGB demo effect.
     Effect {
         /// Effect to run.
         #[arg(value_enum)]
@@ -87,7 +90,12 @@ enum Command {
         #[arg(long, default_value_t = 30)]
         fps: u32,
     },
-    /// Run a TOML profile.
+    /// Run an extension directly.
+    Extension {
+        #[command(subcommand)]
+        command: ExtensionCommand,
+    },
+    /// Run a TOML extension-host profile.
     Run {
         /// Config file path.
         #[arg(long)]
@@ -95,6 +103,43 @@ enum Command {
         /// Print resolved config without touching the keyboard.
         #[arg(long)]
         dry_run: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ExtensionCommand {
+    /// Run a named extension. Use `--` before command-pulse commands.
+    Run {
+        /// Extension to run.
+        #[arg(value_enum)]
+        extension: ExtensionKind,
+        /// Static effect used by the static-effect extension.
+        #[arg(long, value_enum, default_value_t = EffectKind::Comet)]
+        effect: EffectKind,
+        /// Palette for extension renderers.
+        #[arg(long, value_enum, default_value_t = PaletteName::Wooting)]
+        palette: PaletteName,
+        /// Maximum RGB channel value.
+        #[arg(long, default_value_t = 128)]
+        brightness: u8,
+        /// Animation frames per second.
+        #[arg(long, default_value_t = 30)]
+        fps: u32,
+        /// Seconds to run static-effect.
+        #[arg(long, default_value_t = 10)]
+        seconds: u64,
+        /// Command timeout for command-pulse.
+        #[arg(long, default_value_t = 600)]
+        timeout_seconds: u64,
+        /// Command-pulse success hold seconds.
+        #[arg(long, default_value_t = 3)]
+        success_hold_seconds: u64,
+        /// Command-pulse failure hold seconds.
+        #[arg(long, default_value_t = 6)]
+        failure_hold_seconds: u64,
+        /// Command and args for command-pulse.
+        #[arg(last = true, allow_hyphen_values = true)]
+        command: Vec<String>,
     },
 }
 
@@ -168,14 +213,67 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             run_keyboard(cli.sdk_path, &options, &interrupted)?;
         }
+        Command::Extension { command } => match command {
+            ExtensionCommand::Run {
+                extension,
+                effect,
+                palette,
+                brightness,
+                fps,
+                seconds,
+                timeout_seconds,
+                success_hold_seconds,
+                failure_hold_seconds,
+                command,
+            } => {
+                let (config, options) = match extension {
+                    ExtensionKind::StaticEffect => (
+                        extensions::ExtensionConfig::static_effect(effect),
+                        ExtensionRunOptions {
+                            palette,
+                            brightness,
+                            fps,
+                            seconds: Some(seconds),
+                            continuous: false,
+                        },
+                    ),
+                    ExtensionKind::CommandPulse => (
+                        extensions::ExtensionConfig::command_pulse(CommandPulseConfig {
+                            command,
+                            timeout_seconds,
+                            success_hold_seconds,
+                            failure_hold_seconds,
+                            ..CommandPulseConfig::default()
+                        }),
+                        ExtensionRunOptions {
+                            palette,
+                            brightness,
+                            fps,
+                            seconds: None,
+                            continuous: true,
+                        },
+                    ),
+                };
+                let mut extension = build_extension(&config, effect)?;
+                run_keyboard_extension(
+                    cli.sdk_path,
+                    &options,
+                    &mut *extension,
+                    true,
+                    &interrupted,
+                )?;
+            }
+        },
         Command::Run { config, dry_run } => {
             let config = AppConfig::load(&config)?;
             print_config(&config);
             if !dry_run {
                 let sdk_path = cli.sdk_path.or(config.sdk_path.clone());
-                run_keyboard_with_close_policy(
+                let mut extension = build_extension(&config.extension_config(), config.effect)?;
+                run_keyboard_extension(
                     sdk_path,
-                    &config.run_options(),
+                    &config.extension_run_options(),
+                    &mut *extension,
                     config.warn_on_close_error,
                     &interrupted,
                 )?;
@@ -207,6 +305,20 @@ fn run_keyboard_with_close_policy(
     Ok(())
 }
 
+fn run_keyboard_extension(
+    sdk_path: Option<PathBuf>,
+    options: &ExtensionRunOptions,
+    extension: &mut dyn extensions::KeyboardExtension,
+    warn_on_close_error: bool,
+    interrupted: &AtomicBool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut keyboard = WootingRgb::open(sdk_path.as_deref())?;
+    print_info(keyboard.info());
+    run_extension(&keyboard, options, extension, interrupted)?;
+    close_best_effort(&mut keyboard, warn_on_close_error);
+    Ok(())
+}
+
 fn close_best_effort(keyboard: &mut WootingRgb, warn: bool) {
     if let Err(error) = keyboard.close()
         && warn
@@ -218,8 +330,10 @@ fn close_best_effort(keyboard: &mut WootingRgb, warn: bool) {
 }
 
 fn print_config(config: &AppConfig) {
+    let extension = config.extension_config();
     println!("config:");
     println!("  sdk_path: {}", path_display(config.sdk_path.as_ref()));
+    println!("  extension: {:?}", extension.kind);
     println!("  effect: {}", config.effect);
     println!("  palette: {}", config.palette);
     println!("  brightness: {}", config.brightness);
@@ -227,6 +341,13 @@ fn print_config(config: &AppConfig) {
     println!("  seconds: {:?}", config.seconds);
     println!("  continuous: {}", config.continuous);
     println!("  warn_on_close_error: {}", config.warn_on_close_error);
+    if extension.kind == ExtensionKind::CommandPulse {
+        println!("  command: {:?}", extension.command_pulse.command);
+        println!(
+            "  timeout_seconds: {}",
+            extension.command_pulse.timeout_seconds
+        );
+    }
 }
 
 fn path_display(path: Option<&PathBuf>) -> String {

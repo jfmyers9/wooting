@@ -1,5 +1,5 @@
-use crate::effects::{Color, Frame, MAX_COLUMNS, MAX_ROWS};
-use crate::ffi::{RgbSdk, SdkLoadError};
+use super::rgb_ffi::{RgbSdk, SdkLoadError};
+use crate::render::{Color, Frame, MAX_COLUMNS, MAX_ROWS};
 use std::ffi::CStr;
 use std::path::Path;
 
