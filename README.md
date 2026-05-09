@@ -1,121 +1,90 @@
 # Wooting Signals
 
-Data-driven RGB automation for Wooting keyboards. Wooting Signals watches external signals — shell commands, GitHub, markets, sports, calendars, games, APIs — and maps them to programmable lighting strategies on your keyboard.
+Turn your Wooting keyboard into a live status display.
 
-Current state: the first signal is **Command Pulse**, which turns build/test commands into running/success/failure RGB feedback. The renderer and runner are structured so future signals can share the same RGB backend, layouts, palettes, and cleanup behavior.
+Wooting Signals reads local and remote signals — commands, GitHub, timers, APIs, and manual profiles — then paints temporary RGB overlays on your keyboard. Use it for build feedback, CI status, focus sessions, alerts, and ambient workstation cues.
 
-The crate builds the `wooting-signals` binary. `wooting-extension` and `wooting-hack` are compatibility aliases during migration.
+## What it does
 
-## Intended usage
+- **Command Pulse**: wraps a command and shows running / success / failure lighting.
+- **GitHub / CI Beacon**: maps Actions and PR status to keyboard zones.
+- **Focus Cockpit**: shows focus, break, paused, and overtime states.
+- **Market Pulse** and **Sports / Racing Alerts**: poll provider APIs and render alert states.
+- **App Aura**: manually switch workstation profiles such as terminal, meeting, game, or late night.
+- **Soundwave**: opt-in desk-toy prototype driven by manual audio levels.
+- **Static effects**: run comet, rainbow, matrix, breath, and row test scenes.
 
-Use this as a local RGB automation companion, not as a Wootility replacement:
+Wooting Signals is **not** a Wootility replacement. Configure firmware, key maps, actuation, rapid trigger, onboard profiles, and baseline lighting in Wootility; run Wooting Signals when you want host-driven overlays.
 
-- Wootility configures firmware, key maps, actuation, rapid trigger, onboard profiles, and baseline lighting.
-- Wooting Signals temporarily paints host-side RGB overlays while it is running.
-- Signal profiles connect sources to lighting strategies: command status now; GitHub, stocks, racing/sports, timers, and analog pressure later.
-- Normal exit or Ctrl-C attempts to restore/reset lighting through the RGB SDK close path.
+## Quick start
 
-## Mental model
+### 1. Build the RGB SDK
 
-```text
-external source -> signal state -> lighting strategy -> RGB frame -> Wooting keyboard
-```
+From the repository root, build the official [`WootingKb/wooting-rgb-sdk`](https://github.com/WootingKb/wooting-rgb-sdk). Wooting Signals loads this library at runtime.
 
-Examples:
-
-- `make check` running -> cyan sweep
-- tests passed -> green bloom
-- GitHub Actions failed -> red alert zone
-- stock up/down -> green/red market pulse
-- favorite team scored -> team-color burst
-- future analog pressure -> per-key heatmap
-
-## Wootility coexistence
-
-Wootility remains the source of truth for keyboard configuration and baseline profiles. Wooting Signals does not register inside Wootility and is not a Wootility plugin.
-
-If Wootility or Wootility Background Service is actively writing RGB while Wooting Signals is running, live RGB control is effectively last-writer-wins. For best results, configure the keyboard in Wootility, then run Wooting Signals when you want data-driven overlays.
-
-## SDK contracts
-
-### RGB output
-
-Current output uses the official [`WootingKb/wooting-rgb-sdk`](https://github.com/WootingKb/wooting-rgb-sdk) C ABI through runtime dynamic loading. The SDK source is tracked as a git submodule in `external/wooting-rgb-sdk` for reference and local builds.
-
-Full-frame array updates are the primary rendering path. The direct single-key command remains available for SDK probing and simple notification experiments.
-
-### Future analog input
-
-Analog features should use `wooting-analog-sdk_dist` as an application dependency, following Wooting's distributable/system-SDK delegation model. This project is not an Analog SDK plugin unless it someday adds support for new hardware.
-
-## Safety
-
-- Start with moderate brightness (`--brightness 96`) and adjust per command.
-- Commands open a Wooting RGB session and try `wooting_rgb_close()` on normal exit.
-- Ctrl-C is handled during timed effects and signals so the process attempts cleanup.
-- Long-running signal profiles should be opt-in and conservative.
-
-## Prerequisites
-
-### macOS
+macOS:
 
 ```sh
 brew install automake pkg-config hidapi libusb
 git submodule update --init --recursive
-cd external/wooting-rgb-sdk/mac
-make
+(cd external/wooting-rgb-sdk/mac && make)
 ```
 
-If the CLI cannot find the library automatically:
+Linux:
 
 ```sh
-cargo run -- --sdk-path external/wooting-rgb-sdk/mac/libwooting-rgb-sdk.dylib info
-```
-
-### Linux
-
-Install your distro packages for `pkg-config`, `gcc`, `make`, and `hidapi`/`hidapi-hidraw` development headers. Then:
-
-```sh
+# Install your distro packages for pkg-config, gcc, make, and hidapi/hidapi-hidraw headers.
 git submodule update --init --recursive
-cd external/wooting-rgb-sdk/linux
-make
+(cd external/wooting-rgb-sdk/linux && make)
 ```
 
-Linux HID access may require udev rules or running with permissions that can open the keyboard HID interface.
+Linux may also need udev rules or permissions that allow access to the keyboard HID interface.
 
-## RGB/dev utilities
+If the SDK library is not found automatically, pass `--sdk-path` or set:
+
+```sh
+export WOOTING_RGB_SDK_PATH="$PWD/external/wooting-rgb-sdk/mac/libwooting-rgb-sdk.dylib"
+```
+
+Use the matching `.so` path on Linux.
+
+### 2. Check the keyboard
 
 ```sh
 cargo run -- info
-cargo run -- layout-info
 cargo run -- test --brightness 96 --seconds 3
-cargo run -- rainbow --brightness 128 --seconds 10 --fps 30
-cargo run -- effect comet --palette cyberpunk --brightness 128 --seconds 10 --fps 30
-cargo run -- direct --row 0 --column 0 --brightness 96 --seconds 3
 ```
 
-## Signal commands
-
-Run a static RGB scene through the signal runner:
-
-```sh
-cargo run -- signal run static-effect --effect comet --palette cyberpunk --seconds 10
-```
-
-Run Command Pulse around a build/test command:
+### 3. Wrap a build or test command
 
 ```sh
 cargo run -- signal run command-pulse --palette wooting -- make check
 cargo run -- signal run command-pulse --timeout-seconds 120 -- cargo test
-cargo run -- signal run command-pulse --cwd "$PWD" --env RUST_LOG=info --output inherit --summary -- make check
 ```
 
-Command Pulse runs with inherited stdout/stderr by default, so build/test output stays visible. Use `--output quiet` or `output = "quiet"` when the lighting status is enough. `--summary` / `summary = true` prints a short completion line without capturing command output.
+Command output is inherited by default, so your build/test logs remain visible. Add `--summary` for a short completion line or `--output quiet` when lighting feedback is enough.
 
-Compatibility: `extension run ...` remains accepted as an alias for now.
+## Common commands
 
-## Config runner
+```sh
+# Device and layout
+cargo run -- info
+cargo run -- layout-info
+
+# Effects
+cargo run -- rainbow --brightness 128 --seconds 10 --fps 30
+cargo run -- effect comet --palette cyberpunk --brightness 128 --seconds 10 --fps 30
+
+# Direct signals
+cargo run -- signal run static-effect --effect comet --palette cyberpunk --seconds 10
+cargo run -- signal run focus-cockpit --focus-minutes 25 --break-minutes 5 --cycles 4 --dim
+cargo run -- signal run github-ci --repo owner/repo --branch main
+cargo run -- signal run app-aura --profile terminal --dim
+```
+
+## Run from a profile
+
+Profiles are TOML files that let you save a signal, brightness, FPS, timing, and integration settings.
 
 Validate without touching the keyboard:
 
@@ -124,10 +93,6 @@ cargo run -- run --config examples/wooting-signals.toml --dry-run
 cargo run -- run --config examples/command-pulse.toml --dry-run
 cargo run -- run --config examples/github-ci.toml --dry-run
 cargo run -- run --config examples/focus-cockpit.toml --dry-run
-cargo run -- run --config examples/market-pulse.toml --dry-run
-cargo run -- run --config examples/sports-alerts.toml --dry-run
-cargo run -- run --config examples/app-aura.toml --dry-run
-cargo run -- run --config examples/soundwave.toml --dry-run
 ```
 
 Run a profile:
@@ -136,119 +101,77 @@ Run a profile:
 cargo run -- run --config examples/wooting-signals.toml
 ```
 
-Example static scene config:
-
-```toml
-effect = "comet"
-palette = "cyberpunk"
-brightness = 128
-fps = 30
-seconds = 10
-continuous = false
-warn_on_close_error = true
-
-[signal]
-kind = "static-effect"
-effect = "comet"
-```
-
-Example Command Pulse config:
+Minimal Command Pulse profile:
 
 ```toml
 palette = "wooting"
 brightness = 128
 fps = 30
-seconds = 0
 continuous = true
 
 [signal]
 kind = "command-pulse"
 command = ["make", "check"]
-# cwd = "/path/to/project"
-# env = { RUST_LOG = "info" }
 output = "inherit"
 summary = true
 timeout_seconds = 600
 success_hold_seconds = 3
 failure_hold_seconds = 6
 interrupted_hold_seconds = 2
-
-[signal.state_colors]
-success = [0, 220, 80]
-failure = [255, 32, 24]
-timeout = [255, 128, 0]
-interrupted = [160, 80, 255]
 ```
 
-## GitHub / CI Beacon
+See [`examples/`](examples/) for ready-to-edit profiles.
 
-GitHub / CI Beacon polls GitHub directly and maps Actions/PR state onto keyboard zones:
+## Signal guide
 
-- Actions running/passing/failing/stale/error use the function row.
-- PR review requested/approved uses navigation/arrows.
-- Merge conflicts use both function and navigation zones as a red alert.
+### Command Pulse
 
-Use `GITHUB_TOKEN` for private repos or higher rate limits. Public repos can run without a token. Dry-run output prints `token_env` only; it never prints token values.
+Use this around local work that has a clear exit code: tests, builds, linters, deploy scripts, or long-running commands.
 
 ```sh
-export GITHUB_TOKEN=ghp_...
-cargo run -- run --config examples/github-ci.toml --dry-run
+cargo run -- signal run command-pulse -- make check
+cargo run -- signal run command-pulse --cwd "$PWD" --env RUST_LOG=info --summary -- cargo test
+```
+
+Lighting states:
+
+- running: animated progress
+- success: success hold
+- failure: failure hold
+- timeout: timeout alert
+- interrupted: Ctrl-C/interrupted hold
+
+### GitHub / CI Beacon
+
+Poll GitHub and show Actions / PR state on keyboard zones.
+
+```sh
+export GITHUB_TOKEN=ghp_... # optional for public repos; recommended for private repos/rate limits
 cargo run -- signal run github-ci --repo owner/repo --branch main
 cargo run -- signal run github-ci --repo owner/repo --pull-request 123 --poll-seconds 60
 ```
 
-Example GitHub config:
+Dry-run output prints token environment variable names only, never token values.
 
-```toml
-[signal]
-kind = "github-ci"
-repo = "owner/repo"
-branch = "main"
-# pull_request = 123
-token_env = "GITHUB_TOKEN"
-poll_seconds = 60
-stale_seconds = 300
-```
+### Focus Cockpit
 
-## Focus Cockpit
-
-Focus Cockpit is a local timer signal for long-running workstation sessions. It renders focus/break progress on the function row, switches to an overtime alert after configured cycles, and supports paused plus meeting-safe dim modes.
+Render focus and break progress on the function row, with paused, dim, meeting-safe, and overtime modes.
 
 ```sh
-cargo run -- run --config examples/focus-cockpit.toml --dry-run
 cargo run -- signal run focus-cockpit --focus-minutes 25 --break-minutes 5 --cycles 4 --dim
 cargo run -- signal run focus-cockpit --meeting-safe --dim
 ```
 
-Example Focus Cockpit config:
+### Market Pulse and Sports / Racing Alerts
 
-```toml
-palette = "wooting"
-brightness = 72
-fps = 10
-seconds = 0
-continuous = true
-warn_on_close_error = true
+These poll provider-neutral JSON APIs. Keep tokens in environment variables, not config files. Dry-run output redacts query strings and token values.
 
-[signal]
-kind = "focus-cockpit"
-focus_minutes = 25
-break_minutes = 5
-cycles = 4
-start_paused = false
-meeting_safe = false
-dim = true
+```sh
+cargo run -- run --config examples/market-pulse.toml --dry-run
+cargo run -- run --config examples/sports-alerts.toml --dry-run
 ```
 
-For LaunchAgent use, install normally, copy `examples/focus-cockpit.toml` to `~/Library/Application Support/wooting-signals/config.toml`, review brightness/timing, then bootstrap the LaunchAgent manually. The installer remains opt-in and does not load the agent automatically.
-
-## External source packs
-
-Market Pulse and Sports / Racing Alerts share the external-source polling helper used for API-key redaction, polling intervals, bounded backoff, stale/error states, and event-key deduplication.
-
-These integrations are provider-neutral placeholders. Prefer free/OSS-friendly APIs and keep tokens in environment variables (`MARKET_API_TOKEN`, `SPORTS_API_TOKEN`) rather than config files. Dry-run output redacts query strings in `market_api_url` / `sports_api_url` and prints token env var names only.
-
-Market Pulse expects JSON shaped like:
+Expected market shape:
 
 ```json
 {
@@ -264,7 +187,7 @@ Market Pulse expects JSON shaped like:
 }
 ```
 
-Sports / Racing Alerts expects JSON shaped like:
+Expected sports/racing shape:
 
 ```json
 {
@@ -281,97 +204,24 @@ Sports / Racing Alerts expects JSON shaped like:
 }
 ```
 
-Validate examples:
+### App Aura and Soundwave
+
+App Aura currently uses manual profiles and requires no macOS Accessibility permission:
 
 ```sh
-cargo run -- run --config examples/market-pulse.toml --dry-run
-cargo run -- run --config examples/sports-alerts.toml --dry-run
+cargo run -- signal run app-aura --profile terminal --dim
+cargo run -- signal run app-aura --profile meeting --dim
 ```
 
-## Platform and Wooting-specific labs
-
-App Aura is implemented as a portable manual profile signal. Manual profiles (`manual`, `ide`, `terminal`, `meeting`, `game`, `recording`, `late-night`) require no macOS permissions. Future frontmost-app automation on macOS will require Accessibility permission and may require Automation consent for app-specific integrations; Linux and Windows need separate backends.
-
-Soundwave is implemented as an opt-in desk-toy prototype. It is disabled by default and starts no microphone or system-audio capture. Future capture backends must request OS audio permission explicitly and respect the CPU-limit config.
-
-Analog Lava Lab is documented as a roadmap stub in `src/sdk/analog.rs` and `examples/analog-lava-lab.toml`. Runtime analog visualization is deferred until `wooting-analog-sdk_dist` loading, device permissions, concurrent RGB/analog access, and HID-keycode-to-RGB-matrix mapping are validated.
-
-Validate lab examples:
+Soundwave is disabled unless explicitly enabled and currently uses manual levels:
 
 ```sh
-cargo run -- run --config examples/app-aura.toml --dry-run
-cargo run -- run --config examples/soundwave.toml --dry-run
+cargo run -- signal run soundwave --enabled --level 0.7 --bass 0.4
 ```
 
-## Profile v2 direction
+## macOS install helper
 
-The stable config path still accepts one `[signal]`. Profile v2 introduces typed `[[sources]]`, `[[rules]]`, and `[scenes]` sections so future integrations can share one routing model. Today, the runner executes the first runnable source while rules/scenes are parsed and validated for upcoming multi-source rendering.
-
-Validate the profile-v2 example without touching the keyboard:
-
-```sh
-cargo run -- run --config examples/profile-v2.toml --dry-run
-```
-
-Example profile-v2 shape:
-
-```toml
-[[sources]]
-id = "checks"
-type = "command-pulse"
-command = ["make", "check"]
-
-[[rules]]
-when = "checks.status == 'failure'"
-scene = "red-alert"
-priority = 100
-
-[scenes.red-alert]
-effect = "breath"
-palette = "heat"
-zones = ["function", "navigation"]
-```
-
-Dry-run output prints resolved source, rule, and scene names only. Future secret-bearing source configs must keep tokens in environment variables or redact them from dry-run/log output.
-
-## Development
-
-```sh
-make check
-make test
-make run-info
-make run-effect
-make config-dry-run
-```
-
-## 0.1 MVP acceptance
-
-The local MVP is considered healthy when:
-
-- `make check` passes formatting, clippy, and unit tests.
-- Static and Command Pulse profiles validate with `--dry-run` without touching the keyboard.
-- `wooting-signals` is the primary documented binary name; `wooting-extension` and `wooting-hack` appear only as compatibility aliases/examples.
-- The macOS installer remains dry-run by default and does not load the LaunchAgent unless explicitly requested.
-- Hardware smoke checks, when a keyboard is attached, pass with `cargo run -- info`, a short `test`, and Command Pulse around a local command.
-
-Useful environment variable:
-
-```sh
-export WOOTING_RGB_SDK_PATH="$PWD/external/wooting-rgb-sdk/mac/libwooting-rgb-sdk.dylib"
-```
-
-## macOS workstation workflow
-
-The workstation mode is intentionally conservative: scripts install files and generate a LaunchAgent, but the agent is not loaded unless you opt in.
-
-| Item                  | Path                                                          |
-| --------------------- | ------------------------------------------------------------- |
-| Binary                | `~/.local/bin/wooting-signals`                                |
-| Compatibility aliases | `~/.local/bin/wooting-extension`, `~/.local/bin/wooting-hack` |
-| Config                | `~/Library/Application Support/wooting-signals/config.toml`   |
-| Log                   | `~/Library/Logs/wooting-signals.log`                          |
-| LaunchAgent           | `~/Library/LaunchAgents/com.jimmy.wooting-signals.plist`      |
-| SDK dylib             | repo `external/wooting-rgb-sdk/mac/libwooting-rgb-sdk.dylib`  |
+The installer is conservative: it can install the binary and write a LaunchAgent plist, but it does not load the agent unless you opt in.
 
 Dry-run install:
 
@@ -379,17 +229,22 @@ Dry-run install:
 scripts/install-macos.sh
 ```
 
-The dry run prints the release build, binary, compatibility alias, config, log, LaunchAgent, and SDK actions it would take. It does not copy files or load the LaunchAgent.
-
 Apply install:
 
 ```sh
 scripts/install-macos.sh --apply
 ```
 
-Apply mode builds the release binary, installs `~/.local/bin/wooting-signals`, creates compatibility symlinks, writes a default config only if one is missing, and writes the LaunchAgent plist. It still does not load the LaunchAgent unless you also pass `--bootstrap`.
+Installed paths:
 
-After reviewing config, opt into LaunchAgent mode manually:
+| Item        | Path                                                        |
+| ----------- | ----------------------------------------------------------- |
+| Binary      | `~/.local/bin/wooting-signals`                              |
+| Config      | `~/Library/Application Support/wooting-signals/config.toml` |
+| Log         | `~/Library/Logs/wooting-signals.log`                        |
+| LaunchAgent | `~/Library/LaunchAgents/com.jimmy.wooting-signals.plist`    |
+
+After reviewing the config, opt into LaunchAgent mode manually:
 
 ```sh
 launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.jimmy.wooting-signals.plist
@@ -403,13 +258,34 @@ Uninstall binary and LaunchAgent plist:
 scripts/uninstall-macos.sh --apply
 ```
 
+## Safety and coexistence
+
+- Start with moderate brightness, for example `--brightness 96`.
+- Wooting Signals opens an RGB session and attempts to reset/close it on normal exit and Ctrl-C.
+- If Wootility or Wootility Background Service writes RGB at the same time, lighting is effectively last-writer-wins.
+- Long-running profiles should use conservative brightness and polling intervals.
+
 ## Troubleshooting
 
 - `failed to load Wooting RGB SDK`: build the SDK and pass `--sdk-path`, or set `WOOTING_RGB_SDK_PATH`.
 - `no Wooting RGB keyboard found`: confirm the keyboard is connected and supported by the RGB SDK.
-- No lighting change: try a static test first, confirm SDK debug logs, and verify OS HID permissions.
-- Close/reset warning after an effect: the SDK did not acknowledge `wooting_rgb_close()`. The CLI has closed the handle; if lighting is not restored, rerun `cargo run -- info`, try a short `test`, or unplug/replug the keyboard.
+- No lighting change: try `cargo run -- info`, then a short `test`, and verify OS HID permissions.
+- Close/reset warning after an effect: the SDK did not acknowledge `wooting_rgb_close()`. If lighting is not restored, rerun `cargo run -- info`, try a short `test`, or unplug/replug the keyboard.
 
-## Signal candidates
+## Development
 
-See [`docs/ideas.md`](docs/ideas.md) for Command Pulse, GitHub/CI, market, sports/racing, Focus Cockpit, App Aura, Soundwave Desk Toy, and Analog Lava Lab.
+```sh
+make check
+make test
+make run-info
+make run-effect
+make config-dry-run
+```
+
+Profile v2 support is available for parsing and validation with typed `[[sources]]`, `[[rules]]`, and `[scenes]`; the runner currently executes the first runnable source.
+
+```sh
+cargo run -- run --config examples/profile-v2.toml --dry-run
+```
+
+Compatibility aliases `wooting-extension` and `wooting-hack` are retained during migration, but `wooting-signals` is the primary binary name.
