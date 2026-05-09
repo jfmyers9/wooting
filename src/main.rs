@@ -13,7 +13,9 @@ use layout::KeyboardLayout;
 use render::{Color, PaletteName};
 use runner::{RunOptions, SignalRunOptions, run_effect, run_signal, sleep_interruptibly};
 use sdk::rgb::{DeviceInfo, WootingRgb};
-use signals::{CommandPulseConfig, CommandPulseOutput, GitHubCiConfig, SignalKind, build_signal};
+use signals::{
+    CommandPulseConfig, CommandPulseOutput, FocusConfig, GitHubCiConfig, SignalKind, build_signal,
+};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -173,6 +175,24 @@ enum SignalCommand {
         /// GitHub polling interval.
         #[arg(long, default_value_t = 60)]
         poll_seconds: u64,
+        /// Focus phase duration for focus-cockpit.
+        #[arg(long, default_value_t = 25)]
+        focus_minutes: u64,
+        /// Break phase duration for focus-cockpit.
+        #[arg(long, default_value_t = 5)]
+        break_minutes: u64,
+        /// Number of focus/break cycles before overtime.
+        #[arg(long, default_value_t = 1)]
+        cycles: u32,
+        /// Start focus-cockpit in paused mode.
+        #[arg(long)]
+        start_paused: bool,
+        /// Start focus-cockpit in meeting-safe dim mode.
+        #[arg(long)]
+        meeting_safe: bool,
+        /// Dim focus-cockpit output.
+        #[arg(long)]
+        dim: bool,
         /// Seconds before GitHub status is treated as stale.
         #[arg(long, default_value_t = 300)]
         stale_seconds: u64,
@@ -274,6 +294,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 token_env,
                 api_base,
                 poll_seconds,
+                focus_minutes,
+                break_minutes,
+                cycles,
+                start_paused,
+                meeting_safe,
+                dim,
                 stale_seconds,
                 command,
             } => {
@@ -319,6 +345,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             api_base,
                             poll_seconds,
                             stale_seconds,
+                        }),
+                        SignalRunOptions {
+                            palette,
+                            brightness,
+                            fps,
+                            seconds: None,
+                            continuous: true,
+                        },
+                    ),
+                    SignalKind::FocusCockpit => (
+                        signals::SignalConfig::focus_cockpit(FocusConfig {
+                            focus_minutes,
+                            break_minutes,
+                            cycles,
+                            start_paused,
+                            meeting_safe,
+                            dim,
                         }),
                         SignalRunOptions {
                             palette,
@@ -431,7 +474,18 @@ fn print_config(config: &AppConfig) {
     if !config.sources.is_empty() && !config.rules.is_empty() {
         println!("  selected_scenes:");
         for source in &config.sources {
-            for status in ["running", "success", "failure", "timeout", "interrupted"] {
+            for status in [
+                "running",
+                "success",
+                "failure",
+                "timeout",
+                "interrupted",
+                "focus",
+                "break",
+                "overtime",
+                "paused",
+                "meeting-safe",
+            ] {
                 if let Some(selected) = config.select_scene(&source.id, status) {
                     println!(
                         "    {}.{status}: {} (priority {}, effect {:?})",
@@ -467,6 +521,14 @@ fn print_config(config: &AppConfig) {
             println!("  api_base: {}", signal.github_ci.api_base);
             println!("  poll_seconds: {}", signal.github_ci.poll_seconds);
             println!("  stale_seconds: {}", signal.github_ci.stale_seconds);
+        }
+        SignalKind::FocusCockpit => {
+            println!("  focus_minutes: {}", signal.focus.focus_minutes);
+            println!("  break_minutes: {}", signal.focus.break_minutes);
+            println!("  cycles: {}", signal.focus.cycles);
+            println!("  start_paused: {}", signal.focus.start_paused);
+            println!("  meeting_safe: {}", signal.focus.meeting_safe);
+            println!("  dim: {}", signal.focus.dim);
         }
         SignalKind::StaticEffect => {}
     }

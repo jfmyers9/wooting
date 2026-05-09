@@ -40,6 +40,7 @@ wooting-signals macOS install
   plist: $plist_path
   legacy plists left untouched: $legacy_extension_plist_path, $legacy_hack_plist_path
   sdk: $sdk_path
+  focus profile template: $repo/examples/focus-cockpit.toml
 INFO
 
 run() {
@@ -112,5 +113,8 @@ To opt in after reviewing config:
   launchctl bootstrap gui/\$UID "$plist_path"
   launchctl kickstart gui/\$UID/com.jimmy.wooting-signals
   launchctl print gui/\$UID/com.jimmy.wooting-signals
+
+For a long-running Focus Cockpit profile, first review and copy:
+  cp "$repo/examples/focus-cockpit.toml" "$config_dst"
 NEXT
 fi

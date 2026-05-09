@@ -123,6 +123,7 @@ Validate without touching the keyboard:
 cargo run -- run --config examples/wooting-signals.toml --dry-run
 cargo run -- run --config examples/command-pulse.toml --dry-run
 cargo run -- run --config examples/github-ci.toml --dry-run
+cargo run -- run --config examples/focus-cockpit.toml --dry-run
 ```
 
 Run a profile:
@@ -204,6 +205,38 @@ token_env = "GITHUB_TOKEN"
 poll_seconds = 60
 stale_seconds = 300
 ```
+
+## Focus Cockpit
+
+Focus Cockpit is a local timer signal for long-running workstation sessions. It renders focus/break progress on the function row, switches to an overtime alert after configured cycles, and supports paused plus meeting-safe dim modes.
+
+```sh
+cargo run -- run --config examples/focus-cockpit.toml --dry-run
+cargo run -- signal run focus-cockpit --focus-minutes 25 --break-minutes 5 --cycles 4 --dim
+cargo run -- signal run focus-cockpit --meeting-safe --dim
+```
+
+Example Focus Cockpit config:
+
+```toml
+palette = "wooting"
+brightness = 72
+fps = 10
+seconds = 0
+continuous = true
+warn_on_close_error = true
+
+[signal]
+kind = "focus-cockpit"
+focus_minutes = 25
+break_minutes = 5
+cycles = 4
+start_paused = false
+meeting_safe = false
+dim = true
+```
+
+For LaunchAgent use, install normally, copy `examples/focus-cockpit.toml` to `~/Library/Application Support/wooting-signals/config.toml`, review brightness/timing, then bootstrap the LaunchAgent manually. The installer remains opt-in and does not load the agent automatically.
 
 ## Profile v2 direction
 

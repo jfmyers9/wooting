@@ -1,7 +1,7 @@
 use crate::effects::EffectKind;
 use crate::render::PaletteName;
 use crate::runner::{RunOptions, SignalRunOptions};
-use crate::signals::{CommandPulseConfig, GitHubCiConfig, SignalConfig};
+use crate::signals::{CommandPulseConfig, FocusConfig, GitHubCiConfig, SignalConfig};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -35,6 +35,8 @@ pub struct SourceConfig {
     pub command_pulse: CommandPulseConfig,
     #[serde(flatten)]
     pub github_ci: GitHubCiConfig,
+    #[serde(flatten)]
+    pub focus: FocusConfig,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -45,6 +47,7 @@ pub enum SourceKind {
     CommandPulse,
     #[serde(rename = "github-ci", alias = "git-hub-ci")]
     GithubCi,
+    FocusCockpit,
     GithubActions,
     GithubPullRequests,
 }
@@ -96,6 +99,7 @@ impl SourceConfig {
             SourceKind::GithubCi | SourceKind::GithubActions | SourceKind::GithubPullRequests => {
                 Some(SignalConfig::github_ci(self.github_ci.clone()))
             }
+            SourceKind::FocusCockpit => Some(SignalConfig::focus_cockpit(self.focus.clone())),
         }
     }
 }
@@ -330,6 +334,29 @@ token_env = "GH_TOKEN"
         assert_eq!(signal.github_ci.repo, "owner/repo");
         assert_eq!(signal.github_ci.branch.as_deref(), Some("main"));
         assert_eq!(signal.github_ci.token_env, "GH_TOKEN");
+    }
+
+    #[test]
+    fn profile_source_builds_focus_cockpit_signal_config() {
+        let config: AppConfig = toml::from_str(
+            r#"
+[[sources]]
+id = "focus"
+type = "focus-cockpit"
+focus_minutes = 45
+break_minutes = 10
+cycles = 2
+meeting_safe = true
+"#,
+        )
+        .unwrap();
+
+        let signal = config.signal_config();
+        assert_eq!(signal.kind, SignalKind::FocusCockpit);
+        assert_eq!(signal.focus.focus_minutes, 45);
+        assert_eq!(signal.focus.break_minutes, 10);
+        assert_eq!(signal.focus.cycles, 2);
+        assert!(signal.focus.meeting_safe);
     }
 
     #[test]

@@ -1,4 +1,5 @@
 pub mod command_pulse;
+pub mod focus;
 pub mod github;
 pub mod static_effect;
 
@@ -6,6 +7,7 @@ use crate::effects::EffectKind;
 use crate::render::{Frame, RenderContext};
 use clap::ValueEnum;
 pub use command_pulse::{CommandPulseConfig, CommandPulseOutput, CommandPulseSignal};
+pub use focus::{FocusConfig, FocusSignal};
 pub use github::{GitHubCiConfig, GitHubCiSignal};
 use serde::Deserialize;
 pub use static_effect::StaticEffectSignal;
@@ -28,6 +30,7 @@ pub enum SignalKind {
     #[serde(rename = "github-ci", alias = "git-hub-ci")]
     #[value(name = "github-ci", alias = "git-hub-ci")]
     GitHubCi,
+    FocusCockpit,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -39,6 +42,8 @@ pub struct SignalConfig {
     pub command_pulse: CommandPulseConfig,
     #[serde(flatten)]
     pub github_ci: GitHubCiConfig,
+    #[serde(flatten)]
+    pub focus: FocusConfig,
 }
 
 impl Default for SignalConfig {
@@ -48,6 +53,7 @@ impl Default for SignalConfig {
             effect: Some(EffectKind::default()),
             command_pulse: CommandPulseConfig::default(),
             github_ci: GitHubCiConfig::default(),
+            focus: FocusConfig::default(),
         }
     }
 }
@@ -59,6 +65,7 @@ impl SignalConfig {
             effect: Some(effect),
             command_pulse: CommandPulseConfig::default(),
             github_ci: GitHubCiConfig::default(),
+            focus: FocusConfig::default(),
         }
     }
 
@@ -68,6 +75,7 @@ impl SignalConfig {
             effect: None,
             command_pulse,
             github_ci: GitHubCiConfig::default(),
+            focus: FocusConfig::default(),
         }
     }
 
@@ -77,6 +85,17 @@ impl SignalConfig {
             effect: None,
             command_pulse: CommandPulseConfig::default(),
             github_ci,
+            focus: FocusConfig::default(),
+        }
+    }
+
+    pub fn focus_cockpit(focus: FocusConfig) -> Self {
+        Self {
+            kind: SignalKind::FocusCockpit,
+            effect: None,
+            command_pulse: CommandPulseConfig::default(),
+            github_ci: GitHubCiConfig::default(),
+            focus,
         }
     }
 }
@@ -93,5 +112,6 @@ pub fn build_signal(
             config.command_pulse.clone(),
         )?)),
         SignalKind::GitHubCi => Ok(Box::new(GitHubCiSignal::new(config.github_ci.clone())?)),
+        SignalKind::FocusCockpit => Ok(Box::new(FocusSignal::new(config.focus.clone()))),
     }
 }

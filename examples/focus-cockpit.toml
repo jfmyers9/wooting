@@ -1,0 +1,18 @@
+# Example Focus Cockpit profile.
+# Safe for long-running LaunchAgent use after you opt in manually.
+
+palette = "wooting"
+brightness = 72
+fps = 10
+seconds = 0
+continuous = true
+warn_on_close_error = true
+
+[signal]
+kind = "focus-cockpit"
+focus_minutes = 25
+break_minutes = 5
+cycles = 4
+start_paused = false
+meeting_safe = false
+dim = true
