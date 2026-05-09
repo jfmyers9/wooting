@@ -1,0 +1,17 @@
+# Example Soundwave Desk Toy profile.
+# Disabled by default: no microphone or system-audio capture starts unless you
+# explicitly opt in. Current prototype uses manual level/bass values.
+
+palette = "cyberpunk"
+brightness = 80
+fps = 20
+seconds = 0
+continuous = true
+warn_on_close_error = true
+
+[signal]
+kind = "soundwave"
+enabled = false
+level = 0.0
+bass = 0.0
+cpu_limit_percent = 10

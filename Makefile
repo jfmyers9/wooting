@@ -1,4 +1,4 @@
-.PHONY: check fmt clippy test run-info run-test run-effect run-command-pulse config-dry-run command-pulse-dry-run github-ci-dry-run focus-dry-run market-dry-run sports-dry-run install-dry-run uninstall-dry-run
+.PHONY: check fmt clippy test run-info run-test run-effect run-command-pulse config-dry-run command-pulse-dry-run github-ci-dry-run focus-dry-run market-dry-run sports-dry-run app-aura-dry-run soundwave-dry-run install-dry-run uninstall-dry-run
 
 check: fmt clippy test
 
@@ -40,6 +40,12 @@ market-dry-run:
 
 sports-dry-run:
 	cargo run -- run --config examples/sports-alerts.toml --dry-run
+
+app-aura-dry-run:
+	cargo run -- run --config examples/app-aura.toml --dry-run
+
+soundwave-dry-run:
+	cargo run -- run --config examples/soundwave.toml --dry-run
 
 install-dry-run:
 	scripts/install-macos.sh

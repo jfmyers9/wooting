@@ -126,6 +126,8 @@ cargo run -- run --config examples/github-ci.toml --dry-run
 cargo run -- run --config examples/focus-cockpit.toml --dry-run
 cargo run -- run --config examples/market-pulse.toml --dry-run
 cargo run -- run --config examples/sports-alerts.toml --dry-run
+cargo run -- run --config examples/app-aura.toml --dry-run
+cargo run -- run --config examples/soundwave.toml --dry-run
 ```
 
 Run a profile:
@@ -284,6 +286,21 @@ Validate examples:
 ```sh
 cargo run -- run --config examples/market-pulse.toml --dry-run
 cargo run -- run --config examples/sports-alerts.toml --dry-run
+```
+
+## Platform and Wooting-specific labs
+
+App Aura is implemented as a portable manual profile signal. Manual profiles (`manual`, `ide`, `terminal`, `meeting`, `game`, `recording`, `late-night`) require no macOS permissions. Future frontmost-app automation on macOS will require Accessibility permission and may require Automation consent for app-specific integrations; Linux and Windows need separate backends.
+
+Soundwave is implemented as an opt-in desk-toy prototype. It is disabled by default and starts no microphone or system-audio capture. Future capture backends must request OS audio permission explicitly and respect the CPU-limit config.
+
+Analog Lava Lab is documented as a roadmap stub in `src/sdk/analog.rs` and `examples/analog-lava-lab.toml`. Runtime analog visualization is deferred until `wooting-analog-sdk_dist` loading, device permissions, concurrent RGB/analog access, and HID-keycode-to-RGB-matrix mapping are validated.
+
+Validate lab examples:
+
+```sh
+cargo run -- run --config examples/app-aura.toml --dry-run
+cargo run -- run --config examples/soundwave.toml --dry-run
 ```
 
 ## Profile v2 direction

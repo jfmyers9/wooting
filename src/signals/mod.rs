@@ -1,19 +1,23 @@
+pub mod app_aura;
 pub mod command_pulse;
 pub mod external;
 pub mod focus;
 pub mod github;
 pub mod market;
+pub mod soundwave;
 pub mod sports;
 pub mod static_effect;
 
 use crate::effects::EffectKind;
 use crate::render::{Frame, RenderContext};
+pub use app_aura::{AppAuraConfig, AppAuraSignal};
 use clap::ValueEnum;
 pub use command_pulse::{CommandPulseConfig, CommandPulseOutput, CommandPulseSignal};
 pub use focus::{FocusConfig, FocusSignal};
 pub use github::{GitHubCiConfig, GitHubCiSignal};
 pub use market::{MarketConfig, MarketSignal};
 use serde::Deserialize;
+pub use soundwave::{SoundwaveConfig, SoundwaveSignal};
 pub use sports::{SportsConfig, SportsSignal};
 pub use static_effect::StaticEffectSignal;
 use std::sync::atomic::AtomicBool;
@@ -38,6 +42,8 @@ pub enum SignalKind {
     FocusCockpit,
     MarketPulse,
     SportsAlerts,
+    AppAura,
+    Soundwave,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -55,6 +61,10 @@ pub struct SignalConfig {
     pub market: MarketConfig,
     #[serde(flatten)]
     pub sports: SportsConfig,
+    #[serde(flatten)]
+    pub app_aura: AppAuraConfig,
+    #[serde(flatten)]
+    pub soundwave: SoundwaveConfig,
 }
 
 impl Default for SignalConfig {
@@ -67,80 +77,80 @@ impl Default for SignalConfig {
             focus: FocusConfig::default(),
             market: MarketConfig::default(),
             sports: SportsConfig::default(),
+            app_aura: AppAuraConfig::default(),
+            soundwave: SoundwaveConfig::default(),
         }
     }
 }
 
 impl SignalConfig {
-    pub fn static_effect(effect: EffectKind) -> Self {
+    fn base(kind: SignalKind) -> Self {
         Self {
-            kind: SignalKind::StaticEffect,
-            effect: Some(effect),
+            kind,
+            effect: None,
             command_pulse: CommandPulseConfig::default(),
             github_ci: GitHubCiConfig::default(),
             focus: FocusConfig::default(),
             market: MarketConfig::default(),
             sports: SportsConfig::default(),
+            app_aura: AppAuraConfig::default(),
+            soundwave: SoundwaveConfig::default(),
+        }
+    }
+
+    pub fn static_effect(effect: EffectKind) -> Self {
+        Self {
+            effect: Some(effect),
+            ..Self::base(SignalKind::StaticEffect)
         }
     }
 
     pub fn command_pulse(command_pulse: CommandPulseConfig) -> Self {
         Self {
-            kind: SignalKind::CommandPulse,
-            effect: None,
             command_pulse,
-            github_ci: GitHubCiConfig::default(),
-            focus: FocusConfig::default(),
-            market: MarketConfig::default(),
-            sports: SportsConfig::default(),
+            ..Self::base(SignalKind::CommandPulse)
         }
     }
 
     pub fn github_ci(github_ci: GitHubCiConfig) -> Self {
         Self {
-            kind: SignalKind::GitHubCi,
-            effect: None,
-            command_pulse: CommandPulseConfig::default(),
             github_ci,
-            focus: FocusConfig::default(),
-            market: MarketConfig::default(),
-            sports: SportsConfig::default(),
+            ..Self::base(SignalKind::GitHubCi)
         }
     }
 
     pub fn focus_cockpit(focus: FocusConfig) -> Self {
         Self {
-            kind: SignalKind::FocusCockpit,
-            effect: None,
-            command_pulse: CommandPulseConfig::default(),
-            github_ci: GitHubCiConfig::default(),
             focus,
-            market: MarketConfig::default(),
-            sports: SportsConfig::default(),
+            ..Self::base(SignalKind::FocusCockpit)
         }
     }
 
     pub fn market_pulse(market: MarketConfig) -> Self {
         Self {
-            kind: SignalKind::MarketPulse,
-            effect: None,
-            command_pulse: CommandPulseConfig::default(),
-            github_ci: GitHubCiConfig::default(),
-            focus: FocusConfig::default(),
             market,
-            sports: SportsConfig::default(),
+            ..Self::base(SignalKind::MarketPulse)
         }
     }
 
     pub fn sports_alerts(sports: SportsConfig) -> Self {
         Self {
-            kind: SignalKind::SportsAlerts,
-            effect: None,
-            command_pulse: CommandPulseConfig::default(),
-            github_ci: GitHubCiConfig::default(),
-            focus: FocusConfig::default(),
-            market: MarketConfig::default(),
             sports,
+            ..Self::base(SignalKind::SportsAlerts)
+        }
+    }
+
+    pub fn app_aura(app_aura: AppAuraConfig) -> Self {
+        Self {
+            app_aura,
+            ..Self::base(SignalKind::AppAura)
+        }
+    }
+
+    pub fn soundwave(soundwave: SoundwaveConfig) -> Self {
+        Self {
+            soundwave,
+            ..Self::base(SignalKind::Soundwave)
         }
     }
 }
@@ -160,5 +170,7 @@ pub fn build_signal(
         SignalKind::FocusCockpit => Ok(Box::new(FocusSignal::new(config.focus.clone()))),
         SignalKind::MarketPulse => Ok(Box::new(MarketSignal::new(config.market.clone()))),
         SignalKind::SportsAlerts => Ok(Box::new(SportsSignal::new(config.sports.clone()))),
+        SignalKind::AppAura => Ok(Box::new(AppAuraSignal::new(config.app_aura.clone()))),
+        SignalKind::Soundwave => Ok(Box::new(SoundwaveSignal::new(config.soundwave.clone()))),
     }
 }

@@ -1,0 +1,9 @@
+# Analog Lava Lab roadmap placeholder.
+# This is intentionally not runnable yet: analog input needs validation against
+# wooting-analog-sdk_dist, device permissions, and HID-to-RGB matrix mapping.
+
+# Future shape:
+# [signal]
+# kind = "analog-lava-lab"
+# mode = "pressure-heatmap"
+# sdk = "wooting-analog-sdk_dist"

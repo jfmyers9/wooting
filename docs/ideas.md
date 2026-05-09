@@ -52,27 +52,27 @@ Wooting Signals is a data-driven RGB automation app for Wooting keyboards. A sig
 
 ## App Aura
 
-- Source: frontmost macOS application or manual profile switch.
-- State: IDE, terminal, meeting, game, recording, late-night.
+- Source: manual profile switch now; future frontmost macOS application detection later.
+- State: manual, IDE, terminal, meeting, game, recording, late-night.
 - Scene: app-specific ambient palette or scene.
-- Status: later platform-specific track.
-- Risks: macOS Accessibility/Automation permissions and portable fallback.
+- Status: prototype implemented as a portable manual profile signal.
+- Risks: macOS frontmost-app automation requires Accessibility permission and may need Automation consent for some app integrations. Linux/Windows need separate platform backends. Portable fallback is manual profile selection and requires no permissions.
 
 ## Soundwave Desk Toy
 
-- Source: microphone or system audio levels.
-- State: volume, spectrum bands, bass pulse.
+- Source: manual level/bass values now; future microphone or system audio levels later.
+- State: disabled, volume, spectrum bands, bass pulse.
 - Scene: spectrum bars, bass pulses, ambient color wash.
-- Status: later wow-factor track.
-- Risks: audio permissions, CPU use, platform-specific audio capture.
+- Status: prototype implemented as an opt-in disabled-by-default signal.
+- Risks: microphone/system-audio capture requires explicit OS permission, can increase CPU usage, and is platform-specific. Current prototype starts no capture by default and exposes a CPU-limit config placeholder.
 
 ## Analog Lava Lab
 
 - Source: Wooting analog key pressure via future `wooting-analog-sdk_dist` backend.
 - State: pressed keys and pressure values.
 - Scene: pressure visualizer, typing heatmap, rapid-trigger trainer, analog game overlays.
-- Status: later Wooting-specific track after analog backend research.
-- Risks: SDK distribution, device permissions, HID-keycode-to-RGB-matrix mapping.
+- Status: roadmap stub added in `src/sdk/analog.rs`; runtime signal deferred until SDK behavior and matrix mapping are validated.
+- Risks: SDK distribution, device permissions, concurrent RGB/analog access, and HID-keycode-to-RGB-matrix mapping.
 
 ## Engine direction
 

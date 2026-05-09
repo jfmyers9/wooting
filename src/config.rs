@@ -2,7 +2,8 @@ use crate::effects::EffectKind;
 use crate::render::PaletteName;
 use crate::runner::{RunOptions, SignalRunOptions};
 use crate::signals::{
-    CommandPulseConfig, FocusConfig, GitHubCiConfig, MarketConfig, SignalConfig, SportsConfig,
+    AppAuraConfig, CommandPulseConfig, FocusConfig, GitHubCiConfig, MarketConfig, SignalConfig,
+    SoundwaveConfig, SportsConfig,
 };
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -43,6 +44,10 @@ pub struct SourceConfig {
     pub market: MarketConfig,
     #[serde(flatten)]
     pub sports: SportsConfig,
+    #[serde(flatten)]
+    pub app_aura: AppAuraConfig,
+    #[serde(flatten)]
+    pub soundwave: SoundwaveConfig,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -56,6 +61,8 @@ pub enum SourceKind {
     FocusCockpit,
     MarketPulse,
     SportsAlerts,
+    AppAura,
+    Soundwave,
     GithubActions,
     GithubPullRequests,
 }
@@ -110,6 +117,8 @@ impl SourceConfig {
             SourceKind::FocusCockpit => Some(SignalConfig::focus_cockpit(self.focus.clone())),
             SourceKind::MarketPulse => Some(SignalConfig::market_pulse(self.market.clone())),
             SourceKind::SportsAlerts => Some(SignalConfig::sports_alerts(self.sports.clone())),
+            SourceKind::AppAura => Some(SignalConfig::app_aura(self.app_aura.clone())),
+            SourceKind::Soundwave => Some(SignalConfig::soundwave(self.soundwave.clone())),
         }
     }
 }

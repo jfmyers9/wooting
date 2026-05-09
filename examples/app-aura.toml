@@ -1,0 +1,16 @@
+# Example App Aura profile.
+# Manual profile switching is portable and requires no macOS permissions.
+# Future frontmost-app automation on macOS would require Accessibility consent.
+
+palette = "wooting"
+brightness = 64
+fps = 10
+seconds = 0
+continuous = true
+warn_on_close_error = true
+
+[signal]
+kind = "app-aura"
+profile = "ide"
+accessibility_enabled = false
+dim = true

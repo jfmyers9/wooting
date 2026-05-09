@@ -4,5 +4,6 @@
 //! input should live in an `analog` backend that loads `wooting-analog-sdk_dist`
 //! as an application dependency, not as an Analog SDK plugin.
 
+pub mod analog;
 pub mod rgb;
 mod rgb_ffi;

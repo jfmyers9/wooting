@@ -14,8 +14,8 @@ use render::{Color, PaletteName};
 use runner::{RunOptions, SignalRunOptions, run_effect, run_signal, sleep_interruptibly};
 use sdk::rgb::{DeviceInfo, WootingRgb};
 use signals::{
-    CommandPulseConfig, CommandPulseOutput, FocusConfig, GitHubCiConfig, MarketConfig, SignalKind,
-    SportsConfig, build_signal,
+    AppAuraConfig, CommandPulseConfig, CommandPulseOutput, FocusConfig, GitHubCiConfig,
+    MarketConfig, SignalKind, SoundwaveConfig, SportsConfig, build_signal,
 };
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -203,9 +203,27 @@ enum SignalCommand {
         /// Start focus-cockpit in meeting-safe dim mode.
         #[arg(long)]
         meeting_safe: bool,
-        /// Dim focus-cockpit output.
+        /// Dim focus-cockpit or app-aura output.
         #[arg(long)]
         dim: bool,
+        /// Manual App Aura profile.
+        #[arg(long, default_value = "manual")]
+        profile: String,
+        /// Permit future macOS Accessibility automation for app-aura.
+        #[arg(long)]
+        accessibility_enabled: bool,
+        /// Enable soundwave rendering. Disabled by default.
+        #[arg(long)]
+        enabled: bool,
+        /// Manual soundwave level for the opt-in prototype.
+        #[arg(long, default_value_t = 0.0)]
+        level: f32,
+        /// Manual soundwave bass level for the opt-in prototype.
+        #[arg(long, default_value_t = 0.0)]
+        bass: f32,
+        /// CPU limit target for future sound capture.
+        #[arg(long, default_value_t = 10)]
+        cpu_limit_percent: u8,
         /// Seconds before GitHub status is treated as stale.
         #[arg(long, default_value_t = 300)]
         stale_seconds: u64,
@@ -317,6 +335,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 start_paused,
                 meeting_safe,
                 dim,
+                profile,
+                accessibility_enabled,
+                enabled,
+                level,
+                bass,
+                cpu_limit_percent,
                 stale_seconds,
                 command,
             } => {
@@ -412,6 +436,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             favorites,
                             poll_seconds,
                             stale_seconds,
+                        }),
+                        SignalRunOptions {
+                            palette,
+                            brightness,
+                            fps,
+                            seconds: None,
+                            continuous: true,
+                        },
+                    ),
+                    SignalKind::AppAura => (
+                        signals::SignalConfig::app_aura(AppAuraConfig {
+                            profile: parse_app_aura_profile(&profile)?,
+                            accessibility_enabled,
+                            dim,
+                        }),
+                        SignalRunOptions {
+                            palette,
+                            brightness,
+                            fps,
+                            seconds: None,
+                            continuous: true,
+                        },
+                    ),
+                    SignalKind::Soundwave => (
+                        signals::SignalConfig::soundwave(SoundwaveConfig {
+                            enabled,
+                            level,
+                            bass,
+                            cpu_limit_percent,
                         }),
                         SignalRunOptions {
                             palette,
@@ -539,6 +592,11 @@ fn print_config(config: &AppConfig) {
                 "positive",
                 "negative",
                 "stale",
+                "manual",
+                "ide",
+                "terminal",
+                "meeting",
+                "recording",
             ] {
                 if let Some(selected) = config.select_scene(&source.id, status) {
                     println!(
@@ -599,7 +657,39 @@ fn print_config(config: &AppConfig) {
             println!("  poll_seconds: {}", signal.sports.poll_seconds);
             println!("  stale_seconds: {}", signal.sports.stale_seconds);
         }
+        SignalKind::AppAura => {
+            println!("  profile: {:?}", signal.app_aura.profile);
+            println!(
+                "  accessibility_enabled: {}",
+                signal.app_aura.accessibility_enabled
+            );
+            println!("  dim: {}", signal.app_aura.dim);
+        }
+        SignalKind::Soundwave => {
+            println!("  enabled: {}", signal.soundwave.enabled);
+            println!("  level: {}", signal.soundwave.level);
+            println!("  bass: {}", signal.soundwave.bass);
+            println!(
+                "  cpu_limit_percent: {}",
+                signal.soundwave.cpu_limit_percent
+            );
+        }
         SignalKind::StaticEffect => {}
+    }
+}
+
+fn parse_app_aura_profile(value: &str) -> Result<signals::app_aura::AppAuraProfile, String> {
+    match value {
+        "manual" => Ok(signals::app_aura::AppAuraProfile::Manual),
+        "ide" => Ok(signals::app_aura::AppAuraProfile::Ide),
+        "terminal" => Ok(signals::app_aura::AppAuraProfile::Terminal),
+        "meeting" => Ok(signals::app_aura::AppAuraProfile::Meeting),
+        "game" => Ok(signals::app_aura::AppAuraProfile::Game),
+        "recording" => Ok(signals::app_aura::AppAuraProfile::Recording),
+        "late-night" => Ok(signals::app_aura::AppAuraProfile::LateNight),
+        _ => Err(format!(
+            "unknown app-aura profile {value:?}; expected manual, ide, terminal, meeting, game, recording, or late-night"
+        )),
     }
 }
 
