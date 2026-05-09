@@ -190,6 +190,16 @@ make run-effect
 make config-dry-run
 ```
 
+## 0.1 MVP acceptance
+
+The local MVP is considered healthy when:
+
+- `make check` passes formatting, clippy, and unit tests.
+- Static and Command Pulse profiles validate with `--dry-run` without touching the keyboard.
+- `wooting-signals` is the primary documented binary name; `wooting-extension` and `wooting-hack` appear only as compatibility aliases/examples.
+- The macOS installer remains dry-run by default and does not load the LaunchAgent unless explicitly requested.
+- Hardware smoke checks, when a keyboard is attached, pass with `cargo run -- info`, a short `test`, and Command Pulse around a local command.
+
 Useful environment variable:
 
 ```sh
@@ -215,11 +225,15 @@ Dry-run install:
 scripts/install-macos.sh
 ```
 
+The dry run prints the release build, binary, compatibility alias, config, log, LaunchAgent, and SDK actions it would take. It does not copy files or load the LaunchAgent.
+
 Apply install:
 
 ```sh
 scripts/install-macos.sh --apply
 ```
+
+Apply mode builds the release binary, installs `~/.local/bin/wooting-signals`, creates compatibility symlinks, writes a default config only if one is missing, and writes the LaunchAgent plist. It still does not load the LaunchAgent unless you also pass `--bootstrap`.
 
 After reviewing config, opt into LaunchAgent mode manually:
 

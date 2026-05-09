@@ -1,5 +1,5 @@
 use crate::layout::Zone;
-use crate::render::{Color, Frame, RenderContext, pulse_wave};
+use crate::render::{pulse_wave, Color, Frame, RenderContext};
 use crate::signals::SignalProgram;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -279,8 +279,12 @@ mod tests {
     }
 
     fn config(command: &str) -> CommandPulseConfig {
+        config_args(&[command])
+    }
+
+    fn config_args(command: &[&str]) -> CommandPulseConfig {
         CommandPulseConfig {
-            command: vec![command.to_string()],
+            command: command.iter().map(|part| (*part).to_string()).collect(),
             success_hold_seconds: 0,
             failure_hold_seconds: 0,
             interrupted_hold_seconds: 0,
@@ -301,11 +305,62 @@ mod tests {
         for _ in 0..100 {
             signal.tick(&interrupted);
             if signal.finished() {
+                assert!(matches!(signal.state, CommandPulseState::Success { .. }));
                 return;
             }
             thread::sleep(Duration::from_millis(10));
         }
         panic!("command did not finish");
+    }
+
+    #[test]
+    fn command_pulse_marks_failed_exit() {
+        let interrupted = AtomicBool::new(false);
+        let mut signal = CommandPulseSignal::new(config("false")).unwrap();
+        for _ in 0..100 {
+            signal.tick(&interrupted);
+            if signal.finished() {
+                assert!(matches!(signal.state, CommandPulseState::Failure { .. }));
+                return;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        panic!("command did not finish");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn command_pulse_marks_timeout_and_clears_child() {
+        let interrupted = AtomicBool::new(false);
+        let mut config = config_args(&["sleep", "1"]);
+        config.timeout_seconds = 0;
+        let mut signal = CommandPulseSignal::new(config).unwrap();
+
+        signal.tick(&interrupted);
+        thread::sleep(Duration::from_millis(10));
+        signal.tick(&interrupted);
+
+        assert!(matches!(signal.state, CommandPulseState::TimedOut { .. }));
+        assert!(signal.child.is_none());
+        assert!(signal.finished());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn command_pulse_marks_interrupt_and_clears_child() {
+        let interrupted = AtomicBool::new(false);
+        let mut signal = CommandPulseSignal::new(config_args(&["sleep", "1"])).unwrap();
+
+        signal.tick(&interrupted);
+        interrupted.store(true, std::sync::atomic::Ordering::SeqCst);
+        signal.tick(&interrupted);
+
+        assert!(matches!(
+            signal.state,
+            CommandPulseState::Interrupted { .. }
+        ));
+        assert!(signal.child.is_none());
+        assert!(signal.finished());
     }
 
     #[test]

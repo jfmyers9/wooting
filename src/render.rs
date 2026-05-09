@@ -192,6 +192,16 @@ mod tests {
     }
 
     #[test]
+    fn frame_ignores_out_of_bounds_writes() {
+        let mut frame = Frame::black();
+
+        frame.set(MAX_ROWS, 0, Color::new(255, 0, 0));
+        frame.set(0, MAX_COLUMNS, Color::new(0, 255, 0));
+
+        assert!(frame.as_bytes().iter().all(|channel| *channel == 0));
+    }
+
+    #[test]
     fn palette_gradient_samples_endpoints() {
         let palette = PaletteName::Heat.palette();
         assert_eq!(palette.gradient(0), Color::new(80, 0, 0));

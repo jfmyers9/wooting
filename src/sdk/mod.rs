@@ -1,4 +1,4 @@
-//! Wooting SDK backends used by the extension host.
+//! Wooting SDK backends used by the signal runtime.
 //!
 //! RGB output is implemented today through the Wooting RGB SDK. Future analog
 //! input should live in an `analog` backend that loads `wooting-analog-sdk_dist`
