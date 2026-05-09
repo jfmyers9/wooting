@@ -124,6 +124,8 @@ cargo run -- run --config examples/wooting-signals.toml --dry-run
 cargo run -- run --config examples/command-pulse.toml --dry-run
 cargo run -- run --config examples/github-ci.toml --dry-run
 cargo run -- run --config examples/focus-cockpit.toml --dry-run
+cargo run -- run --config examples/market-pulse.toml --dry-run
+cargo run -- run --config examples/sports-alerts.toml --dry-run
 ```
 
 Run a profile:
@@ -237,6 +239,31 @@ dim = true
 ```
 
 For LaunchAgent use, install normally, copy `examples/focus-cockpit.toml` to `~/Library/Application Support/wooting-signals/config.toml`, review brightness/timing, then bootstrap the LaunchAgent manually. The installer remains opt-in and does not load the agent automatically.
+
+## External source packs
+
+Market Pulse and Sports / Racing Alerts share the external-source polling helper used for API-key redaction, polling intervals, bounded backoff, stale/error states, and event-key deduplication.
+
+These integrations are provider-neutral placeholders. Prefer free/OSS-friendly APIs and keep tokens in environment variables (`MARKET_API_TOKEN`, `SPORTS_API_TOKEN`) rather than config files. Dry-run output redacts query strings in `market_api_url` / `sports_api_url` and prints token env var names only.
+
+Market Pulse expects JSON shaped like:
+
+```json
+{ "market_open": true, "tickers": [{ "symbol": "WOO", "price": 101.0, "previous_close": 100.0, "change_percent": 1.0 }] }
+```
+
+Sports / Racing Alerts expects JSON shaped like:
+
+```json
+{ "events": [{ "id": "race-1", "favorite": "WOO", "status": "live", "score": 2, "opponent_score": 1, "previous_score": 1 }] }
+```
+
+Validate examples:
+
+```sh
+cargo run -- run --config examples/market-pulse.toml --dry-run
+cargo run -- run --config examples/sports-alerts.toml --dry-run
+```
 
 ## Profile v2 direction
 

@@ -14,7 +14,8 @@ use render::{Color, PaletteName};
 use runner::{RunOptions, SignalRunOptions, run_effect, run_signal, sleep_interruptibly};
 use sdk::rgb::{DeviceInfo, WootingRgb};
 use signals::{
-    CommandPulseConfig, CommandPulseOutput, FocusConfig, GitHubCiConfig, SignalKind, build_signal,
+    CommandPulseConfig, CommandPulseOutput, FocusConfig, GitHubCiConfig, MarketConfig, SignalKind,
+    SportsConfig, build_signal,
 };
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -172,7 +173,19 @@ enum SignalCommand {
         /// GitHub API base URL.
         #[arg(long, default_value = "https://api.github.com")]
         api_base: String,
-        /// GitHub polling interval.
+        /// Provider API URL for market-pulse or sports-alerts.
+        #[arg(long)]
+        api_url: Option<String>,
+        /// Watched market symbol. Repeatable.
+        #[arg(long = "watchlist")]
+        watchlist: Vec<String>,
+        /// Market threshold percentage for alerts.
+        #[arg(long, default_value_t = 2.0)]
+        threshold_percent: f64,
+        /// Favorite team/driver for sports alerts. Repeatable.
+        #[arg(long = "favorite")]
+        favorites: Vec<String>,
+        /// External source polling interval.
         #[arg(long, default_value_t = 60)]
         poll_seconds: u64,
         /// Focus phase duration for focus-cockpit.
@@ -293,6 +306,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 pull_request,
                 token_env,
                 api_base,
+                api_url,
+                watchlist,
+                threshold_percent,
+                favorites,
                 poll_seconds,
                 focus_minutes,
                 break_minutes,
@@ -362,6 +379,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             start_paused,
                             meeting_safe,
                             dim,
+                        }),
+                        SignalRunOptions {
+                            palette,
+                            brightness,
+                            fps,
+                            seconds: None,
+                            continuous: true,
+                        },
+                    ),
+                    SignalKind::MarketPulse => (
+                        signals::SignalConfig::market_pulse(MarketConfig {
+                            api_url: api_url.unwrap_or_default(),
+                            token_env,
+                            watchlist,
+                            threshold_percent,
+                            poll_seconds,
+                            stale_seconds,
+                        }),
+                        SignalRunOptions {
+                            palette,
+                            brightness,
+                            fps,
+                            seconds: None,
+                            continuous: true,
+                        },
+                    ),
+                    SignalKind::SportsAlerts => (
+                        signals::SignalConfig::sports_alerts(SportsConfig {
+                            api_url: api_url.unwrap_or_default(),
+                            token_env,
+                            favorites,
+                            poll_seconds,
+                            stale_seconds,
                         }),
                         SignalRunOptions {
                             palette,
@@ -485,6 +535,10 @@ fn print_config(config: &AppConfig) {
                 "overtime",
                 "paused",
                 "meeting-safe",
+                "alert",
+                "positive",
+                "negative",
+                "stale",
             ] {
                 if let Some(selected) = config.select_scene(&source.id, status) {
                     println!(
@@ -530,6 +584,21 @@ fn print_config(config: &AppConfig) {
             println!("  meeting_safe: {}", signal.focus.meeting_safe);
             println!("  dim: {}", signal.focus.dim);
         }
+        SignalKind::MarketPulse => {
+            println!("  api_url: {}", redacted_url(&signal.market.api_url));
+            println!("  token_env: {}", signal.market.token_env);
+            println!("  watchlist: {:?}", signal.market.watchlist);
+            println!("  threshold_percent: {}", signal.market.threshold_percent);
+            println!("  poll_seconds: {}", signal.market.poll_seconds);
+            println!("  stale_seconds: {}", signal.market.stale_seconds);
+        }
+        SignalKind::SportsAlerts => {
+            println!("  api_url: {}", redacted_url(&signal.sports.api_url));
+            println!("  token_env: {}", signal.sports.token_env);
+            println!("  favorites: {:?}", signal.sports.favorites);
+            println!("  poll_seconds: {}", signal.sports.poll_seconds);
+            println!("  stale_seconds: {}", signal.sports.stale_seconds);
+        }
         SignalKind::StaticEffect => {}
     }
 }
@@ -546,6 +615,16 @@ fn parse_env_vars(values: Vec<String>) -> Result<BTreeMap<String, String>, Strin
         env.insert(key.to_string(), var_value.to_string());
     }
     Ok(env)
+}
+
+fn redacted_url(url: &str) -> String {
+    if url.is_empty() {
+        return "<unset>".to_string();
+    }
+    let Some((base, _query)) = url.split_once('?') else {
+        return url.to_string();
+    };
+    format!("{base}?<redacted>")
 }
 
 fn path_display(path: Option<&PathBuf>) -> String {

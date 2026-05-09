@@ -1,11 +1,12 @@
 use crate::layout::Zone;
 use crate::render::{Color, Frame, RenderContext, pulse_wave};
 use crate::signals::SignalProgram;
+use crate::signals::external::{ExternalPollState, ExternalSnapshot, ExternalStatus};
 use serde::Deserialize;
 use serde_json::Value;
 use std::env;
 use std::sync::atomic::AtomicBool;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(default, deny_unknown_fields)]
@@ -63,10 +64,7 @@ pub enum GitHubCiStatus {
 pub struct GitHubCiSignal {
     config: GitHubCiConfig,
     state: GitHubSnapshot,
-    next_poll: Instant,
-    last_success: Option<Instant>,
-    last_event_key: Option<String>,
-    last_alert: Option<Instant>,
+    poll: ExternalPollState,
 }
 
 impl GitHubCiSignal {
@@ -82,64 +80,43 @@ impl GitHubCiSignal {
                 event_key: "idle".to_string(),
                 message: "waiting for first GitHub poll".to_string(),
             },
-            next_poll: Instant::now(),
-            last_success: None,
-            last_event_key: None,
-            last_alert: None,
+            poll: ExternalPollState::default(),
         })
     }
 
     fn poll_if_due(&mut self) {
-        let now = Instant::now();
-        if now < self.next_poll {
-            self.mark_stale_if_needed(now);
+        let now = std::time::Instant::now();
+        if !self.poll.should_poll(now) {
+            if let Some(snapshot) = self.poll.stale_snapshot(now, self.config.stale_seconds) {
+                self.state = github_from_external(snapshot);
+            }
             return;
         }
 
         match fetch_snapshot(&self.config) {
             Ok(snapshot) => {
-                self.record_snapshot(snapshot, now);
-                self.last_success = Some(now);
-                self.next_poll = now + Duration::from_secs(self.config.poll_seconds.max(5));
+                self.poll.mark_success(
+                    &external_from_github(&snapshot),
+                    now,
+                    self.config.poll_seconds,
+                );
+                self.state = snapshot;
             }
             Err(error) => {
                 eprintln!("github-ci poll failed for {}: {error}", self.config.repo);
-                self.record_snapshot(
-                    GitHubSnapshot {
-                        status: GitHubCiStatus::Error,
-                        event_key: format!("error:{error}"),
-                        message: "GitHub poll failed".to_string(),
-                    },
+                let snapshot = GitHubSnapshot {
+                    status: GitHubCiStatus::Error,
+                    event_key: format!("error:{error}"),
+                    message: "GitHub poll failed".to_string(),
+                };
+                self.poll.mark_error(
+                    &external_from_github(&snapshot),
                     now,
+                    self.config.poll_seconds,
                 );
-                self.next_poll =
-                    now + Duration::from_secs((self.config.poll_seconds * 2).clamp(10, 300));
+                self.state = snapshot;
             }
         }
-    }
-
-    fn mark_stale_if_needed(&mut self, now: Instant) {
-        let Some(last_success) = self.last_success else {
-            return;
-        };
-        if last_success.elapsed() > Duration::from_secs(self.config.stale_seconds.max(1)) {
-            self.record_snapshot(
-                GitHubSnapshot {
-                    status: GitHubCiStatus::Stale,
-                    event_key: "stale".to_string(),
-                    message: "GitHub status is stale".to_string(),
-                },
-                now,
-            );
-        }
-    }
-
-    fn record_snapshot(&mut self, snapshot: GitHubSnapshot, now: Instant) {
-        if self.last_event_key.as_deref() != Some(snapshot.event_key.as_str()) {
-            self.last_event_key = Some(snapshot.event_key.clone());
-            self.last_alert = Some(now);
-        }
-        self.state = snapshot;
     }
 
     fn status_color(&self) -> Color {
@@ -153,6 +130,38 @@ impl GitHubCiSignal {
             GitHubCiStatus::ReviewRequested => Color::new(255, 180, 0),
             GitHubCiStatus::Stale => Color::new(120, 120, 120),
         }
+    }
+}
+
+fn external_from_github(snapshot: &GitHubSnapshot) -> ExternalSnapshot {
+    ExternalSnapshot {
+        status: match snapshot.status {
+            GitHubCiStatus::Idle => ExternalStatus::Idle,
+            GitHubCiStatus::Running => ExternalStatus::Running,
+            GitHubCiStatus::Passing | GitHubCiStatus::Approved => ExternalStatus::Positive,
+            GitHubCiStatus::Failing
+            | GitHubCiStatus::ReviewRequested
+            | GitHubCiStatus::Conflict => ExternalStatus::Alert,
+            GitHubCiStatus::Stale => ExternalStatus::Stale,
+            GitHubCiStatus::Error => ExternalStatus::Error,
+        },
+        event_key: snapshot.event_key.clone(),
+        message: snapshot.message.clone(),
+    }
+}
+
+fn github_from_external(snapshot: ExternalSnapshot) -> GitHubSnapshot {
+    GitHubSnapshot {
+        status: match snapshot.status {
+            ExternalStatus::Idle => GitHubCiStatus::Idle,
+            ExternalStatus::Running => GitHubCiStatus::Running,
+            ExternalStatus::Positive => GitHubCiStatus::Passing,
+            ExternalStatus::Negative | ExternalStatus::Alert => GitHubCiStatus::Failing,
+            ExternalStatus::Stale => GitHubCiStatus::Stale,
+            ExternalStatus::Error => GitHubCiStatus::Error,
+        },
+        event_key: snapshot.event_key,
+        message: snapshot.message,
     }
 }
 

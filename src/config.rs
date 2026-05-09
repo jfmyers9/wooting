@@ -1,7 +1,9 @@
 use crate::effects::EffectKind;
 use crate::render::PaletteName;
 use crate::runner::{RunOptions, SignalRunOptions};
-use crate::signals::{CommandPulseConfig, FocusConfig, GitHubCiConfig, SignalConfig};
+use crate::signals::{
+    CommandPulseConfig, FocusConfig, GitHubCiConfig, MarketConfig, SignalConfig, SportsConfig,
+};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -24,7 +26,7 @@ pub struct AppConfig {
     pub scenes: BTreeMap<String, SceneConfig>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct SourceConfig {
     pub id: String,
@@ -37,6 +39,10 @@ pub struct SourceConfig {
     pub github_ci: GitHubCiConfig,
     #[serde(flatten)]
     pub focus: FocusConfig,
+    #[serde(flatten)]
+    pub market: MarketConfig,
+    #[serde(flatten)]
+    pub sports: SportsConfig,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -48,6 +54,8 @@ pub enum SourceKind {
     #[serde(rename = "github-ci", alias = "git-hub-ci")]
     GithubCi,
     FocusCockpit,
+    MarketPulse,
+    SportsAlerts,
     GithubActions,
     GithubPullRequests,
 }
@@ -100,6 +108,8 @@ impl SourceConfig {
                 Some(SignalConfig::github_ci(self.github_ci.clone()))
             }
             SourceKind::FocusCockpit => Some(SignalConfig::focus_cockpit(self.focus.clone())),
+            SourceKind::MarketPulse => Some(SignalConfig::market_pulse(self.market.clone())),
+            SourceKind::SportsAlerts => Some(SignalConfig::sports_alerts(self.sports.clone())),
         }
     }
 }

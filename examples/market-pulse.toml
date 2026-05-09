@@ -1,0 +1,20 @@
+# Example Market Pulse profile.
+# Provider-neutral placeholder: set market_api_url to a free/OSS-compatible JSON endpoint
+# that returns { market_open = bool, tickers = [{ symbol, price,
+# previous_close, change_percent }] }. Keep API tokens in MARKET_API_TOKEN.
+
+palette = "wooting"
+brightness = 80
+fps = 10
+seconds = 0
+continuous = true
+warn_on_close_error = true
+
+[signal]
+kind = "market-pulse"
+market_api_url = "https://example.invalid/market.json"
+market_token_env = "MARKET_API_TOKEN"
+watchlist = ["WOO"]
+threshold_percent = 2.0
+market_poll_seconds = 300
+market_stale_seconds = 900

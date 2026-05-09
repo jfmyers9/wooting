@@ -1,6 +1,9 @@
 pub mod command_pulse;
+pub mod external;
 pub mod focus;
 pub mod github;
+pub mod market;
+pub mod sports;
 pub mod static_effect;
 
 use crate::effects::EffectKind;
@@ -9,7 +12,9 @@ use clap::ValueEnum;
 pub use command_pulse::{CommandPulseConfig, CommandPulseOutput, CommandPulseSignal};
 pub use focus::{FocusConfig, FocusSignal};
 pub use github::{GitHubCiConfig, GitHubCiSignal};
+pub use market::{MarketConfig, MarketSignal};
 use serde::Deserialize;
+pub use sports::{SportsConfig, SportsSignal};
 pub use static_effect::StaticEffectSignal;
 use std::sync::atomic::AtomicBool;
 
@@ -31,6 +36,8 @@ pub enum SignalKind {
     #[value(name = "github-ci", alias = "git-hub-ci")]
     GitHubCi,
     FocusCockpit,
+    MarketPulse,
+    SportsAlerts,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -44,6 +51,10 @@ pub struct SignalConfig {
     pub github_ci: GitHubCiConfig,
     #[serde(flatten)]
     pub focus: FocusConfig,
+    #[serde(flatten)]
+    pub market: MarketConfig,
+    #[serde(flatten)]
+    pub sports: SportsConfig,
 }
 
 impl Default for SignalConfig {
@@ -54,6 +65,8 @@ impl Default for SignalConfig {
             command_pulse: CommandPulseConfig::default(),
             github_ci: GitHubCiConfig::default(),
             focus: FocusConfig::default(),
+            market: MarketConfig::default(),
+            sports: SportsConfig::default(),
         }
     }
 }
@@ -66,6 +79,8 @@ impl SignalConfig {
             command_pulse: CommandPulseConfig::default(),
             github_ci: GitHubCiConfig::default(),
             focus: FocusConfig::default(),
+            market: MarketConfig::default(),
+            sports: SportsConfig::default(),
         }
     }
 
@@ -76,6 +91,8 @@ impl SignalConfig {
             command_pulse,
             github_ci: GitHubCiConfig::default(),
             focus: FocusConfig::default(),
+            market: MarketConfig::default(),
+            sports: SportsConfig::default(),
         }
     }
 
@@ -86,6 +103,8 @@ impl SignalConfig {
             command_pulse: CommandPulseConfig::default(),
             github_ci,
             focus: FocusConfig::default(),
+            market: MarketConfig::default(),
+            sports: SportsConfig::default(),
         }
     }
 
@@ -96,6 +115,32 @@ impl SignalConfig {
             command_pulse: CommandPulseConfig::default(),
             github_ci: GitHubCiConfig::default(),
             focus,
+            market: MarketConfig::default(),
+            sports: SportsConfig::default(),
+        }
+    }
+
+    pub fn market_pulse(market: MarketConfig) -> Self {
+        Self {
+            kind: SignalKind::MarketPulse,
+            effect: None,
+            command_pulse: CommandPulseConfig::default(),
+            github_ci: GitHubCiConfig::default(),
+            focus: FocusConfig::default(),
+            market,
+            sports: SportsConfig::default(),
+        }
+    }
+
+    pub fn sports_alerts(sports: SportsConfig) -> Self {
+        Self {
+            kind: SignalKind::SportsAlerts,
+            effect: None,
+            command_pulse: CommandPulseConfig::default(),
+            github_ci: GitHubCiConfig::default(),
+            focus: FocusConfig::default(),
+            market: MarketConfig::default(),
+            sports,
         }
     }
 }
@@ -113,5 +158,7 @@ pub fn build_signal(
         )?)),
         SignalKind::GitHubCi => Ok(Box::new(GitHubCiSignal::new(config.github_ci.clone())?)),
         SignalKind::FocusCockpit => Ok(Box::new(FocusSignal::new(config.focus.clone()))),
+        SignalKind::MarketPulse => Ok(Box::new(MarketSignal::new(config.market.clone()))),
+        SignalKind::SportsAlerts => Ok(Box::new(SportsSignal::new(config.sports.clone()))),
     }
 }

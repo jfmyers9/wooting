@@ -1,4 +1,4 @@
-.PHONY: check fmt clippy test run-info run-test run-effect run-command-pulse config-dry-run command-pulse-dry-run github-ci-dry-run focus-dry-run install-dry-run uninstall-dry-run
+.PHONY: check fmt clippy test run-info run-test run-effect run-command-pulse config-dry-run command-pulse-dry-run github-ci-dry-run focus-dry-run market-dry-run sports-dry-run install-dry-run uninstall-dry-run
 
 check: fmt clippy test
 
@@ -34,6 +34,12 @@ github-ci-dry-run:
 
 focus-dry-run:
 	cargo run -- run --config examples/focus-cockpit.toml --dry-run
+
+market-dry-run:
+	cargo run -- run --config examples/market-pulse.toml --dry-run
+
+sports-dry-run:
+	cargo run -- run --config examples/sports-alerts.toml --dry-run
 
 install-dry-run:
 	scripts/install-macos.sh

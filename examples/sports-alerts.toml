@@ -1,0 +1,19 @@
+# Example Sports / Racing Alerts profile.
+# Provider-neutral placeholder: set sports_api_url to a free/OSS-compatible JSON endpoint
+# that returns { events = [{ id, favorite/team, status, score,
+# opponent_score, previous_score }] }. Keep API tokens in SPORTS_API_TOKEN.
+
+palette = "wooting"
+brightness = 96
+fps = 15
+seconds = 0
+continuous = true
+warn_on_close_error = true
+
+[signal]
+kind = "sports-alerts"
+sports_api_url = "https://example.invalid/sports.json"
+sports_token_env = "SPORTS_API_TOKEN"
+favorites = ["WOO"]
+sports_poll_seconds = 60
+sports_stale_seconds = 300
