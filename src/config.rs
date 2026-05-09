@@ -1,7 +1,7 @@
 use crate::effects::EffectKind;
 use crate::render::PaletteName;
 use crate::runner::{RunOptions, SignalRunOptions};
-use crate::signals::{CommandPulseConfig, SignalConfig};
+use crate::signals::{CommandPulseConfig, GitHubCiConfig, SignalConfig};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -33,6 +33,8 @@ pub struct SourceConfig {
     pub effect: Option<EffectKind>,
     #[serde(flatten)]
     pub command_pulse: CommandPulseConfig,
+    #[serde(flatten)]
+    pub github_ci: GitHubCiConfig,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -41,6 +43,8 @@ pub enum SourceKind {
     #[default]
     StaticEffect,
     CommandPulse,
+    #[serde(rename = "github-ci", alias = "git-hub-ci")]
+    GithubCi,
     GithubActions,
     GithubPullRequests,
 }
@@ -89,7 +93,9 @@ impl SourceConfig {
             SourceKind::CommandPulse => {
                 Some(SignalConfig::command_pulse(self.command_pulse.clone()))
             }
-            SourceKind::GithubActions | SourceKind::GithubPullRequests => None,
+            SourceKind::GithubCi | SourceKind::GithubActions | SourceKind::GithubPullRequests => {
+                Some(SignalConfig::github_ci(self.github_ci.clone()))
+            }
         }
     }
 }
@@ -303,6 +309,27 @@ effect = "breath"
         let signal = config.signal_config();
         assert_eq!(signal.kind, SignalKind::StaticEffect);
         assert_eq!(signal.effect, Some(EffectKind::Breath));
+    }
+
+    #[test]
+    fn profile_source_builds_github_ci_signal_config() {
+        let config: AppConfig = toml::from_str(
+            r#"
+[[sources]]
+id = "ci"
+type = "github-ci"
+repo = "owner/repo"
+branch = "main"
+token_env = "GH_TOKEN"
+"#,
+        )
+        .unwrap();
+
+        let signal = config.signal_config();
+        assert_eq!(signal.kind, SignalKind::GitHubCi);
+        assert_eq!(signal.github_ci.repo, "owner/repo");
+        assert_eq!(signal.github_ci.branch.as_deref(), Some("main"));
+        assert_eq!(signal.github_ci.token_env, "GH_TOKEN");
     }
 
     #[test]

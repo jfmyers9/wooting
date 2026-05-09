@@ -1,10 +1,12 @@
 pub mod command_pulse;
+pub mod github;
 pub mod static_effect;
 
 use crate::effects::EffectKind;
 use crate::render::{Frame, RenderContext};
 use clap::ValueEnum;
 pub use command_pulse::{CommandPulseConfig, CommandPulseOutput, CommandPulseSignal};
+pub use github::{GitHubCiConfig, GitHubCiSignal};
 use serde::Deserialize;
 pub use static_effect::StaticEffectSignal;
 use std::sync::atomic::AtomicBool;
@@ -23,6 +25,9 @@ pub enum SignalKind {
     #[default]
     StaticEffect,
     CommandPulse,
+    #[serde(rename = "github-ci", alias = "git-hub-ci")]
+    #[value(name = "github-ci", alias = "git-hub-ci")]
+    GitHubCi,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -32,6 +37,8 @@ pub struct SignalConfig {
     pub effect: Option<EffectKind>,
     #[serde(flatten)]
     pub command_pulse: CommandPulseConfig,
+    #[serde(flatten)]
+    pub github_ci: GitHubCiConfig,
 }
 
 impl Default for SignalConfig {
@@ -40,6 +47,7 @@ impl Default for SignalConfig {
             kind: SignalKind::StaticEffect,
             effect: Some(EffectKind::default()),
             command_pulse: CommandPulseConfig::default(),
+            github_ci: GitHubCiConfig::default(),
         }
     }
 }
@@ -50,6 +58,7 @@ impl SignalConfig {
             kind: SignalKind::StaticEffect,
             effect: Some(effect),
             command_pulse: CommandPulseConfig::default(),
+            github_ci: GitHubCiConfig::default(),
         }
     }
 
@@ -58,6 +67,16 @@ impl SignalConfig {
             kind: SignalKind::CommandPulse,
             effect: None,
             command_pulse,
+            github_ci: GitHubCiConfig::default(),
+        }
+    }
+
+    pub fn github_ci(github_ci: GitHubCiConfig) -> Self {
+        Self {
+            kind: SignalKind::GitHubCi,
+            effect: None,
+            command_pulse: CommandPulseConfig::default(),
+            github_ci,
         }
     }
 }
@@ -73,5 +92,6 @@ pub fn build_signal(
         SignalKind::CommandPulse => Ok(Box::new(CommandPulseSignal::new(
             config.command_pulse.clone(),
         )?)),
+        SignalKind::GitHubCi => Ok(Box::new(GitHubCiSignal::new(config.github_ci.clone())?)),
     }
 }

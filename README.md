@@ -122,6 +122,7 @@ Validate without touching the keyboard:
 ```sh
 cargo run -- run --config examples/wooting-signals.toml --dry-run
 cargo run -- run --config examples/command-pulse.toml --dry-run
+cargo run -- run --config examples/github-ci.toml --dry-run
 ```
 
 Run a profile:
@@ -172,6 +173,36 @@ success = [0, 220, 80]
 failure = [255, 32, 24]
 timeout = [255, 128, 0]
 interrupted = [160, 80, 255]
+```
+
+## GitHub / CI Beacon
+
+GitHub / CI Beacon polls GitHub directly and maps Actions/PR state onto keyboard zones:
+
+- Actions running/passing/failing/stale/error use the function row.
+- PR review requested/approved uses navigation/arrows.
+- Merge conflicts use both function and navigation zones as a red alert.
+
+Use `GITHUB_TOKEN` for private repos or higher rate limits. Public repos can run without a token. Dry-run output prints `token_env` only; it never prints token values.
+
+```sh
+export GITHUB_TOKEN=ghp_...
+cargo run -- run --config examples/github-ci.toml --dry-run
+cargo run -- signal run github-ci --repo owner/repo --branch main
+cargo run -- signal run github-ci --repo owner/repo --pull-request 123 --poll-seconds 60
+```
+
+Example GitHub config:
+
+```toml
+[signal]
+kind = "github-ci"
+repo = "owner/repo"
+branch = "main"
+# pull_request = 123
+token_env = "GITHUB_TOKEN"
+poll_seconds = 60
+stale_seconds = 300
 ```
 
 ## Profile v2 direction

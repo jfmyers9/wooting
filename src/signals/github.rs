@@ -1,0 +1,539 @@
+use crate::layout::Zone;
+use crate::render::{Color, Frame, RenderContext, pulse_wave};
+use crate::signals::SignalProgram;
+use serde::Deserialize;
+use serde_json::Value;
+use std::env;
+use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct GitHubCiConfig {
+    pub repo: String,
+    pub branch: Option<String>,
+    pub pull_request: Option<u64>,
+    pub token_env: String,
+    pub api_base: String,
+    pub poll_seconds: u64,
+    pub stale_seconds: u64,
+}
+
+impl Default for GitHubCiConfig {
+    fn default() -> Self {
+        Self {
+            repo: String::new(),
+            branch: None,
+            pull_request: None,
+            token_env: "GITHUB_TOKEN".to_string(),
+            api_base: "https://api.github.com".to_string(),
+            poll_seconds: 60,
+            stale_seconds: 300,
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GitHubCiError {
+    #[error("github-ci requires repo in owner/name form")]
+    MissingRepo,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitHubSnapshot {
+    pub status: GitHubCiStatus,
+    pub event_key: String,
+    pub message: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GitHubCiStatus {
+    Idle,
+    Running,
+    Passing,
+    Failing,
+    ReviewRequested,
+    Approved,
+    Conflict,
+    Stale,
+    Error,
+}
+
+#[derive(Debug)]
+pub struct GitHubCiSignal {
+    config: GitHubCiConfig,
+    state: GitHubSnapshot,
+    next_poll: Instant,
+    last_success: Option<Instant>,
+    last_event_key: Option<String>,
+    last_alert: Option<Instant>,
+}
+
+impl GitHubCiSignal {
+    pub fn new(config: GitHubCiConfig) -> Result<Self, GitHubCiError> {
+        if !config.repo.contains('/') {
+            return Err(GitHubCiError::MissingRepo);
+        }
+
+        Ok(Self {
+            config,
+            state: GitHubSnapshot {
+                status: GitHubCiStatus::Idle,
+                event_key: "idle".to_string(),
+                message: "waiting for first GitHub poll".to_string(),
+            },
+            next_poll: Instant::now(),
+            last_success: None,
+            last_event_key: None,
+            last_alert: None,
+        })
+    }
+
+    fn poll_if_due(&mut self) {
+        let now = Instant::now();
+        if now < self.next_poll {
+            self.mark_stale_if_needed(now);
+            return;
+        }
+
+        match fetch_snapshot(&self.config) {
+            Ok(snapshot) => {
+                self.record_snapshot(snapshot, now);
+                self.last_success = Some(now);
+                self.next_poll = now + Duration::from_secs(self.config.poll_seconds.max(5));
+            }
+            Err(error) => {
+                eprintln!("github-ci poll failed for {}: {error}", self.config.repo);
+                self.record_snapshot(
+                    GitHubSnapshot {
+                        status: GitHubCiStatus::Error,
+                        event_key: format!("error:{error}"),
+                        message: "GitHub poll failed".to_string(),
+                    },
+                    now,
+                );
+                self.next_poll =
+                    now + Duration::from_secs((self.config.poll_seconds * 2).clamp(10, 300));
+            }
+        }
+    }
+
+    fn mark_stale_if_needed(&mut self, now: Instant) {
+        let Some(last_success) = self.last_success else {
+            return;
+        };
+        if last_success.elapsed() > Duration::from_secs(self.config.stale_seconds.max(1)) {
+            self.record_snapshot(
+                GitHubSnapshot {
+                    status: GitHubCiStatus::Stale,
+                    event_key: "stale".to_string(),
+                    message: "GitHub status is stale".to_string(),
+                },
+                now,
+            );
+        }
+    }
+
+    fn record_snapshot(&mut self, snapshot: GitHubSnapshot, now: Instant) {
+        if self.last_event_key.as_deref() != Some(snapshot.event_key.as_str()) {
+            self.last_event_key = Some(snapshot.event_key.clone());
+            self.last_alert = Some(now);
+        }
+        self.state = snapshot;
+    }
+
+    fn status_color(&self) -> Color {
+        match self.state.status {
+            GitHubCiStatus::Idle => Color::new(0, 48, 96),
+            GitHubCiStatus::Running => Color::new(0, 180, 255),
+            GitHubCiStatus::Passing | GitHubCiStatus::Approved => Color::new(0, 220, 80),
+            GitHubCiStatus::Failing | GitHubCiStatus::Conflict | GitHubCiStatus::Error => {
+                Color::new(255, 32, 24)
+            }
+            GitHubCiStatus::ReviewRequested => Color::new(255, 180, 0),
+            GitHubCiStatus::Stale => Color::new(120, 120, 120),
+        }
+    }
+}
+
+impl SignalProgram for GitHubCiSignal {
+    fn tick(&mut self, _interrupted: &AtomicBool) {
+        self.poll_if_due();
+    }
+
+    fn render(&self, ctx: &RenderContext<'_>) -> Frame {
+        let mut frame = Frame::black();
+        let base = self.status_color();
+        let wave = pulse_wave(ctx.tick, 36);
+        let pulse = match self.state.status {
+            GitHubCiStatus::Running | GitHubCiStatus::ReviewRequested => 96 + (wave / 3),
+            GitHubCiStatus::Failing | GitHubCiStatus::Conflict | GitHubCiStatus::Error => {
+                128 + (wave / 2)
+            }
+            _ => 128,
+        };
+        let primary = base.scale(((u16::from(ctx.brightness) * u16::from(pulse)) / 255) as u8);
+        let dim = base.scale(ctx.brightness / 10);
+
+        for key in ctx.layout.keys() {
+            frame.set_coord(key.coord, dim);
+        }
+
+        for key in ctx.layout.keys() {
+            let active = match self.state.status {
+                GitHubCiStatus::Running
+                | GitHubCiStatus::Passing
+                | GitHubCiStatus::Failing
+                | GitHubCiStatus::Stale
+                | GitHubCiStatus::Error => key.zone == Zone::Function,
+                GitHubCiStatus::ReviewRequested | GitHubCiStatus::Approved => {
+                    key.zone == Zone::Navigation || key.zone == Zone::Arrows
+                }
+                GitHubCiStatus::Conflict => {
+                    key.zone == Zone::Function || key.zone == Zone::Navigation
+                }
+                GitHubCiStatus::Idle => key.zone == Zone::Function,
+            };
+            if active {
+                frame.set_coord(key.coord, primary);
+            }
+        }
+
+        frame
+    }
+
+    fn finished(&self) -> bool {
+        false
+    }
+
+    fn shutdown(&mut self, _interrupted: bool) {}
+}
+
+#[derive(Debug, thiserror::Error)]
+enum FetchError {
+    #[error("GitHub API request failed: {0}")]
+    Request(String),
+    #[error("GitHub API response was not valid UTF-8/text: {0}")]
+    Body(#[from] std::io::Error),
+    #[error("GitHub API response was not valid JSON: {0}")]
+    Json(#[from] serde_json::Error),
+}
+
+fn fetch_snapshot(config: &GitHubCiConfig) -> Result<GitHubSnapshot, FetchError> {
+    let token = env::var(&config.token_env).ok();
+    let actions = get_json(
+        config,
+        &format!(
+            "/repos/{}/actions/runs?per_page=10{}",
+            config.repo,
+            config
+                .branch
+                .as_ref()
+                .map(|branch| format!("&branch={branch}"))
+                .unwrap_or_default()
+        ),
+        token.as_deref(),
+    )?;
+    let pr = match config.pull_request {
+        Some(number) => Some(get_json(
+            config,
+            &format!("/repos/{}/pulls/{number}", config.repo),
+            token.as_deref(),
+        )?),
+        None => None,
+    };
+    let reviews = match config.pull_request {
+        Some(number) => Some(get_json(
+            config,
+            &format!("/repos/{}/pulls/{number}/reviews", config.repo),
+            token.as_deref(),
+        )?),
+        None => None,
+    };
+
+    Ok(normalize_snapshot(&actions, pr.as_ref(), reviews.as_ref()))
+}
+
+fn get_json(config: &GitHubCiConfig, path: &str, token: Option<&str>) -> Result<Value, FetchError> {
+    let url = format!("{}{}", config.api_base.trim_end_matches('/'), path);
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(10))
+        .build();
+    let mut request = agent
+        .get(&url)
+        .set("Accept", "application/vnd.github+json")
+        .set("User-Agent", "wooting-signals");
+    if let Some(token) = token.filter(|token| !token.is_empty()) {
+        request = request.set("Authorization", &format!("Bearer {token}"));
+    }
+    let body = request
+        .call()
+        .map_err(|error| FetchError::Request(error.to_string()))?
+        .into_string()?;
+    Ok(serde_json::from_str(&body)?)
+}
+
+pub fn normalize_snapshot(
+    actions: &Value,
+    pull_request: Option<&Value>,
+    reviews: Option<&Value>,
+) -> GitHubSnapshot {
+    if let Some(pr) = pull_request {
+        if pr_has_conflict(pr) {
+            return GitHubSnapshot {
+                status: GitHubCiStatus::Conflict,
+                event_key: pr_event_key("conflict", pr),
+                message: "PR has merge conflicts".to_string(),
+            };
+        }
+        if pr_review_requested(pr) {
+            return GitHubSnapshot {
+                status: GitHubCiStatus::ReviewRequested,
+                event_key: pr_event_key("review-requested", pr),
+                message: "PR review requested".to_string(),
+            };
+        }
+        if reviews_approved(reviews) {
+            return GitHubSnapshot {
+                status: GitHubCiStatus::Approved,
+                event_key: pr_event_key("approved", pr),
+                message: "PR approved".to_string(),
+            };
+        }
+    }
+
+    normalize_actions(actions)
+}
+
+fn normalize_actions(actions: &Value) -> GitHubSnapshot {
+    let Some(run) = actions
+        .get("workflow_runs")
+        .and_then(Value::as_array)
+        .and_then(|runs| runs.first())
+    else {
+        return GitHubSnapshot {
+            status: GitHubCiStatus::Idle,
+            event_key: "actions:none".to_string(),
+            message: "No GitHub Actions runs found".to_string(),
+        };
+    };
+
+    let id = run.get("id").and_then(Value::as_i64).unwrap_or_default();
+    let status = run
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let conclusion = run.get("conclusion").and_then(Value::as_str);
+    let head_sha = run
+        .get("head_sha")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+
+    match (status, conclusion) {
+        ("queued" | "in_progress" | "waiting" | "requested" | "pending", _) => GitHubSnapshot {
+            status: GitHubCiStatus::Running,
+            event_key: format!("actions:{id}:{head_sha}:running"),
+            message: "GitHub Actions running".to_string(),
+        },
+        ("completed", Some("success")) => GitHubSnapshot {
+            status: GitHubCiStatus::Passing,
+            event_key: format!("actions:{id}:{head_sha}:success"),
+            message: "GitHub Actions passing".to_string(),
+        },
+        ("completed", Some("failure" | "timed_out" | "cancelled" | "action_required")) => {
+            GitHubSnapshot {
+                status: GitHubCiStatus::Failing,
+                event_key: format!("actions:{id}:{head_sha}:failure"),
+                message: "GitHub Actions failing".to_string(),
+            }
+        }
+        _ => GitHubSnapshot {
+            status: GitHubCiStatus::Stale,
+            event_key: format!("actions:{id}:{head_sha}:unknown"),
+            message: "GitHub Actions state unknown".to_string(),
+        },
+    }
+}
+
+fn pr_has_conflict(pr: &Value) -> bool {
+    pr.get("mergeable").and_then(Value::as_bool) == Some(false)
+        || matches!(
+            pr.get("mergeable_state").and_then(Value::as_str),
+            Some("dirty" | "blocked" | "behind")
+        )
+}
+
+fn pr_review_requested(pr: &Value) -> bool {
+    pr.get("requested_reviewers")
+        .and_then(Value::as_array)
+        .is_some_and(|reviewers| !reviewers.is_empty())
+        || pr
+            .get("requested_teams")
+            .and_then(Value::as_array)
+            .is_some_and(|teams| !teams.is_empty())
+}
+
+fn reviews_approved(reviews: Option<&Value>) -> bool {
+    reviews.and_then(Value::as_array).is_some_and(|reviews| {
+        reviews
+            .iter()
+            .any(|review| review.get("state").and_then(Value::as_str) == Some("APPROVED"))
+    })
+}
+
+fn pr_event_key(prefix: &str, pr: &Value) -> String {
+    let number = pr.get("number").and_then(Value::as_i64).unwrap_or_default();
+    let sha = pr
+        .pointer("/head/sha")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    format!("pr:{number}:{sha}:{prefix}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout::KeyboardLayout;
+    use crate::render::{PaletteName, RenderContext};
+    use crate::sdk::rgb::{DeviceInfo, DeviceType, Layout};
+
+    fn actions(status: &str, conclusion: Option<&str>) -> Value {
+        serde_json::json!({
+            "workflow_runs": [{
+                "id": 42,
+                "status": status,
+                "conclusion": conclusion,
+                "head_sha": "abc123"
+            }]
+        })
+    }
+
+    fn pr(extra: Value) -> Value {
+        let mut value = serde_json::json!({
+            "number": 7,
+            "mergeable": true,
+            "mergeable_state": "clean",
+            "requested_reviewers": [],
+            "requested_teams": [],
+            "head": { "sha": "def456" }
+        });
+        merge_json(&mut value, extra);
+        value
+    }
+
+    fn merge_json(target: &mut Value, patch: Value) {
+        let (Some(target), Some(patch)) = (target.as_object_mut(), patch.as_object()) else {
+            return;
+        };
+        for (key, value) in patch {
+            target.insert(key.clone(), value.clone());
+        }
+    }
+
+    fn info() -> DeviceInfo {
+        DeviceInfo {
+            connected: true,
+            model: "test".to_string(),
+            max_rows: 6,
+            max_columns: 17,
+            led_index_max: 0,
+            device_type: DeviceType::Keyboard80,
+            layout: Layout::Ansi,
+            v2_interface: true,
+            uses_small_packets: false,
+            uses_multi_report: false,
+        }
+    }
+
+    #[test]
+    fn normalizes_actions_running_success_and_failure() {
+        assert_eq!(
+            normalize_actions(&actions("in_progress", None)).status,
+            GitHubCiStatus::Running
+        );
+        assert_eq!(
+            normalize_actions(&actions("completed", Some("success"))).status,
+            GitHubCiStatus::Passing
+        );
+        assert_eq!(
+            normalize_actions(&actions("completed", Some("failure"))).status,
+            GitHubCiStatus::Failing
+        );
+    }
+
+    #[test]
+    fn normalizes_pr_review_conflict_and_approval() {
+        let requested = pr(serde_json::json!({ "requested_reviewers": [{ "login": "octocat" }] }));
+        assert_eq!(
+            normalize_snapshot(
+                &actions("completed", Some("success")),
+                Some(&requested),
+                None
+            )
+            .status,
+            GitHubCiStatus::ReviewRequested
+        );
+
+        let conflict = pr(serde_json::json!({ "mergeable": false }));
+        assert_eq!(
+            normalize_snapshot(
+                &actions("completed", Some("success")),
+                Some(&conflict),
+                None
+            )
+            .status,
+            GitHubCiStatus::Conflict
+        );
+
+        let approved = pr(serde_json::json!({}));
+        let reviews = serde_json::json!([{ "state": "APPROVED" }]);
+        assert_eq!(
+            normalize_snapshot(
+                &actions("completed", Some("success")),
+                Some(&approved),
+                Some(&reviews)
+            )
+            .status,
+            GitHubCiStatus::Approved
+        );
+    }
+
+    #[test]
+    fn event_keys_are_stable_for_repeated_polls() {
+        let first = normalize_actions(&actions("completed", Some("failure")));
+        let second = normalize_actions(&actions("completed", Some("failure")));
+
+        assert_eq!(first.event_key, second.event_key);
+    }
+
+    #[test]
+    fn github_ci_rejects_missing_repo() {
+        assert!(GitHubCiSignal::new(GitHubCiConfig::default()).is_err());
+    }
+
+    #[test]
+    fn github_ci_renders_full_frame() {
+        let info = info();
+        let layout = KeyboardLayout::for_device(&info);
+        let mut signal = GitHubCiSignal::new(GitHubCiConfig {
+            repo: "owner/repo".to_string(),
+            ..GitHubCiConfig::default()
+        })
+        .unwrap();
+        signal.state = GitHubSnapshot {
+            status: GitHubCiStatus::Conflict,
+            event_key: "conflict".to_string(),
+            message: "conflict".to_string(),
+        };
+
+        let frame = signal.render(&RenderContext {
+            info: &info,
+            layout: &layout,
+            brightness: 96,
+            palette: PaletteName::Wooting,
+            tick: 0,
+        });
+
+        assert_eq!(frame.as_bytes().len(), crate::render::FRAME_BYTES);
+    }
+}

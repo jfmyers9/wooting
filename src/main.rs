@@ -13,7 +13,7 @@ use layout::KeyboardLayout;
 use render::{Color, PaletteName};
 use runner::{RunOptions, SignalRunOptions, run_effect, run_signal, sleep_interruptibly};
 use sdk::rgb::{DeviceInfo, WootingRgb};
-use signals::{CommandPulseConfig, CommandPulseOutput, SignalKind, build_signal};
+use signals::{CommandPulseConfig, CommandPulseOutput, GitHubCiConfig, SignalKind, build_signal};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -32,6 +32,7 @@ struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum Command {
     /// Print connected keyboard metadata.
     Info,
@@ -154,6 +155,27 @@ enum SignalCommand {
         /// Command-pulse interrupted hold seconds.
         #[arg(long, default_value_t = 2)]
         interrupted_hold_seconds: u64,
+        /// GitHub repository for github-ci, in owner/repo form.
+        #[arg(long)]
+        repo: Option<String>,
+        /// GitHub branch filter for github-ci.
+        #[arg(long)]
+        branch: Option<String>,
+        /// GitHub pull request number for github-ci.
+        #[arg(long)]
+        pull_request: Option<u64>,
+        /// Environment variable containing the GitHub token.
+        #[arg(long, default_value = "GITHUB_TOKEN")]
+        token_env: String,
+        /// GitHub API base URL.
+        #[arg(long, default_value = "https://api.github.com")]
+        api_base: String,
+        /// GitHub polling interval.
+        #[arg(long, default_value_t = 60)]
+        poll_seconds: u64,
+        /// Seconds before GitHub status is treated as stale.
+        #[arg(long, default_value_t = 300)]
+        stale_seconds: u64,
         /// Command and args for command-pulse.
         #[arg(last = true, allow_hyphen_values = true)]
         command: Vec<String>,
@@ -246,6 +268,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 success_hold_seconds,
                 failure_hold_seconds,
                 interrupted_hold_seconds,
+                repo,
+                branch,
+                pull_request,
+                token_env,
+                api_base,
+                poll_seconds,
+                stale_seconds,
                 command,
             } => {
                 let env = parse_env_vars(env)?;
@@ -272,6 +301,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             failure_hold_seconds,
                             interrupted_hold_seconds,
                             ..CommandPulseConfig::default()
+                        }),
+                        SignalRunOptions {
+                            palette,
+                            brightness,
+                            fps,
+                            seconds: None,
+                            continuous: true,
+                        },
+                    ),
+                    SignalKind::GitHubCi => (
+                        signals::SignalConfig::github_ci(GitHubCiConfig {
+                            repo: repo.unwrap_or_default(),
+                            branch,
+                            pull_request,
+                            token_env,
+                            api_base,
+                            poll_seconds,
+                            stale_seconds,
                         }),
                         SignalRunOptions {
                             palette,
@@ -394,22 +441,34 @@ fn print_config(config: &AppConfig) {
             }
         }
     }
-    if signal.kind == SignalKind::CommandPulse {
-        println!("  command: {:?}", signal.command_pulse.command);
-        println!("  cwd: {}", path_display(signal.command_pulse.cwd.as_ref()));
-        println!("  env_overrides: {}", signal.command_pulse.env.len());
-        println!("  output: {:?}", signal.command_pulse.output);
-        println!("  summary: {}", signal.command_pulse.summary);
-        println!(
-            "  timeout_seconds: {}",
-            signal.command_pulse.timeout_seconds
-        );
-        println!(
-            "  hold_seconds: success={}, failure={}, interrupted={}",
-            signal.command_pulse.success_hold_seconds,
-            signal.command_pulse.failure_hold_seconds,
-            signal.command_pulse.interrupted_hold_seconds
-        );
+    match signal.kind {
+        SignalKind::CommandPulse => {
+            println!("  command: {:?}", signal.command_pulse.command);
+            println!("  cwd: {}", path_display(signal.command_pulse.cwd.as_ref()));
+            println!("  env_overrides: {}", signal.command_pulse.env.len());
+            println!("  output: {:?}", signal.command_pulse.output);
+            println!("  summary: {}", signal.command_pulse.summary);
+            println!(
+                "  timeout_seconds: {}",
+                signal.command_pulse.timeout_seconds
+            );
+            println!(
+                "  hold_seconds: success={}, failure={}, interrupted={}",
+                signal.command_pulse.success_hold_seconds,
+                signal.command_pulse.failure_hold_seconds,
+                signal.command_pulse.interrupted_hold_seconds
+            );
+        }
+        SignalKind::GitHubCi => {
+            println!("  repo: {}", signal.github_ci.repo);
+            println!("  branch: {:?}", signal.github_ci.branch);
+            println!("  pull_request: {:?}", signal.github_ci.pull_request);
+            println!("  token_env: {}", signal.github_ci.token_env);
+            println!("  api_base: {}", signal.github_ci.api_base);
+            println!("  poll_seconds: {}", signal.github_ci.poll_seconds);
+            println!("  stale_seconds: {}", signal.github_ci.stale_seconds);
+        }
+        SignalKind::StaticEffect => {}
     }
 }
 

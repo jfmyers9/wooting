@@ -1,4 +1,4 @@
-.PHONY: check fmt clippy test run-info run-test run-effect run-command-pulse config-dry-run command-pulse-dry-run install-dry-run uninstall-dry-run
+.PHONY: check fmt clippy test run-info run-test run-effect run-command-pulse config-dry-run command-pulse-dry-run github-ci-dry-run install-dry-run uninstall-dry-run
 
 check: fmt clippy test
 
@@ -28,6 +28,9 @@ config-dry-run:
 
 command-pulse-dry-run:
 	cargo run -- run --config examples/command-pulse.toml --dry-run
+
+github-ci-dry-run:
+	cargo run -- run --config examples/github-ci.toml --dry-run
 
 install-dry-run:
 	scripts/install-macos.sh
