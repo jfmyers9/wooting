@@ -249,13 +249,34 @@ These integrations are provider-neutral placeholders. Prefer free/OSS-friendly A
 Market Pulse expects JSON shaped like:
 
 ```json
-{ "market_open": true, "tickers": [{ "symbol": "WOO", "price": 101.0, "previous_close": 100.0, "change_percent": 1.0 }] }
+{
+  "market_open": true,
+  "tickers": [
+    {
+      "symbol": "WOO",
+      "price": 101.0,
+      "previous_close": 100.0,
+      "change_percent": 1.0
+    }
+  ]
+}
 ```
 
 Sports / Racing Alerts expects JSON shaped like:
 
 ```json
-{ "events": [{ "id": "race-1", "favorite": "WOO", "status": "live", "score": 2, "opponent_score": 1, "previous_score": 1 }] }
+{
+  "events": [
+    {
+      "id": "race-1",
+      "favorite": "WOO",
+      "status": "live",
+      "score": 2,
+      "opponent_score": 1,
+      "previous_score": 1
+    }
+  ]
+}
 ```
 
 Validate examples:
