@@ -11,7 +11,17 @@ warn_on_close_error = true
 [signal]
 kind = "command-pulse"
 command = ["make", "check"]
+# cwd = "/path/to/project"
+# env = { RUST_LOG = "info" }
+output = "inherit"
+summary = true
 timeout_seconds = 600
 success_hold_seconds = 3
 failure_hold_seconds = 6
 interrupted_hold_seconds = 2
+
+[signal.state_colors]
+success = [0, 220, 80]
+failure = [255, 32, 24]
+timeout = [255, 128, 0]
+interrupted = [160, 80, 255]

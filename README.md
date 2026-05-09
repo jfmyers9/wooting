@@ -108,7 +108,10 @@ Run Command Pulse around a build/test command:
 ```sh
 cargo run -- signal run command-pulse --palette wooting -- make check
 cargo run -- signal run command-pulse --timeout-seconds 120 -- cargo test
+cargo run -- signal run command-pulse --cwd "$PWD" --env RUST_LOG=info --output inherit --summary -- make check
 ```
+
+Command Pulse runs with inherited stdout/stderr by default, so build/test output stays visible. Use `--output quiet` or `output = "quiet"` when the lighting status is enough. `--summary` / `summary = true` prints a short completion line without capturing command output.
 
 Compatibility: `extension run ...` remains accepted as an alias for now.
 
@@ -155,9 +158,20 @@ continuous = true
 [signal]
 kind = "command-pulse"
 command = ["make", "check"]
+# cwd = "/path/to/project"
+# env = { RUST_LOG = "info" }
+output = "inherit"
+summary = true
 timeout_seconds = 600
 success_hold_seconds = 3
 failure_hold_seconds = 6
+interrupted_hold_seconds = 2
+
+[signal.state_colors]
+success = [0, 220, 80]
+failure = [255, 32, 24]
+timeout = [255, 128, 0]
+interrupted = [160, 80, 255]
 ```
 
 ## Profile v2 direction

@@ -4,7 +4,7 @@ pub mod static_effect;
 use crate::effects::EffectKind;
 use crate::render::{Frame, RenderContext};
 use clap::ValueEnum;
-pub use command_pulse::{CommandPulseConfig, CommandPulseSignal};
+pub use command_pulse::{CommandPulseConfig, CommandPulseOutput, CommandPulseSignal};
 use serde::Deserialize;
 pub use static_effect::StaticEffectSignal;
 use std::sync::atomic::AtomicBool;

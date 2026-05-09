@@ -13,7 +13,8 @@ use layout::KeyboardLayout;
 use render::{Color, PaletteName};
 use runner::{RunOptions, SignalRunOptions, run_effect, run_signal, sleep_interruptibly};
 use sdk::rgb::{DeviceInfo, WootingRgb};
-use signals::{CommandPulseConfig, SignalKind, build_signal};
+use signals::{CommandPulseConfig, CommandPulseOutput, SignalKind, build_signal};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -129,15 +130,30 @@ enum SignalCommand {
         /// Seconds to run static-effect.
         #[arg(long, default_value_t = 10)]
         seconds: u64,
+        /// Working directory for command-pulse.
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        /// Environment override for command-pulse, in KEY=VALUE form. Repeatable.
+        #[arg(long = "env", value_name = "KEY=VALUE")]
+        env: Vec<String>,
+        /// Command stdout/stderr policy for command-pulse.
+        #[arg(long, value_enum, default_value_t = CommandPulseOutput::Inherit)]
+        output: CommandPulseOutput,
+        /// Print a command-pulse status summary when the command completes.
+        #[arg(long)]
+        summary: bool,
         /// Command timeout for command-pulse.
         #[arg(long, default_value_t = 600)]
         timeout_seconds: u64,
         /// Command-pulse success hold seconds.
         #[arg(long, default_value_t = 3)]
         success_hold_seconds: u64,
-        /// Command-pulse failure hold seconds.
+        /// Command-pulse failure/timeout hold seconds.
         #[arg(long, default_value_t = 6)]
         failure_hold_seconds: u64,
+        /// Command-pulse interrupted hold seconds.
+        #[arg(long, default_value_t = 2)]
+        interrupted_hold_seconds: u64,
         /// Command and args for command-pulse.
         #[arg(last = true, allow_hyphen_values = true)]
         command: Vec<String>,
@@ -222,11 +238,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 brightness,
                 fps,
                 seconds,
+                cwd,
+                env,
+                output,
+                summary,
                 timeout_seconds,
                 success_hold_seconds,
                 failure_hold_seconds,
+                interrupted_hold_seconds,
                 command,
             } => {
+                let env = parse_env_vars(env)?;
                 let (config, options) = match signal {
                     SignalKind::StaticEffect => (
                         signals::SignalConfig::static_effect(effect),
@@ -241,9 +263,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     SignalKind::CommandPulse => (
                         signals::SignalConfig::command_pulse(CommandPulseConfig {
                             command,
+                            cwd,
+                            env,
+                            output,
+                            summary,
                             timeout_seconds,
                             success_hold_seconds,
                             failure_hold_seconds,
+                            interrupted_hold_seconds,
                             ..CommandPulseConfig::default()
                         }),
                         SignalRunOptions {
@@ -369,11 +396,35 @@ fn print_config(config: &AppConfig) {
     }
     if signal.kind == SignalKind::CommandPulse {
         println!("  command: {:?}", signal.command_pulse.command);
+        println!("  cwd: {}", path_display(signal.command_pulse.cwd.as_ref()));
+        println!("  env_overrides: {}", signal.command_pulse.env.len());
+        println!("  output: {:?}", signal.command_pulse.output);
+        println!("  summary: {}", signal.command_pulse.summary);
         println!(
             "  timeout_seconds: {}",
             signal.command_pulse.timeout_seconds
         );
+        println!(
+            "  hold_seconds: success={}, failure={}, interrupted={}",
+            signal.command_pulse.success_hold_seconds,
+            signal.command_pulse.failure_hold_seconds,
+            signal.command_pulse.interrupted_hold_seconds
+        );
     }
+}
+
+fn parse_env_vars(values: Vec<String>) -> Result<BTreeMap<String, String>, String> {
+    let mut env = BTreeMap::new();
+    for value in values {
+        let (key, var_value) = value
+            .split_once('=')
+            .ok_or_else(|| format!("--env must use KEY=VALUE, got {value:?}"))?;
+        if key.is_empty() {
+            return Err(format!("--env key cannot be empty in {value:?}"));
+        }
+        env.insert(key.to_string(), var_value.to_string());
+    }
+    Ok(env)
 }
 
 fn path_display(path: Option<&PathBuf>) -> String {
