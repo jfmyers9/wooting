@@ -1,4 +1,4 @@
-# Example Command Pulse extension profile.
+# Example Command Pulse signal profile.
 # Runs `make check`, shows progress, then success/failure/timeout status.
 
 palette = "wooting"
@@ -8,7 +8,7 @@ seconds = 0
 continuous = true
 warn_on_close_error = true
 
-[extension]
+[signal]
 kind = "command-pulse"
 command = ["make", "check"]
 timeout_seconds = 600

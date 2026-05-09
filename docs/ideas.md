@@ -1,49 +1,79 @@
-# Wooting Extension Candidates
+# Wooting Signals Ideas
 
-This project is a host-side Wooting Extension Host: extensions read local state and render temporary RGB overlays while Wootility remains responsible for keyboard configuration and baseline profiles.
+Wooting Signals is a data-driven RGB automation app for Wooting keyboards. A signal reads external state, turns it into a small status snapshot, and renders a lighting strategy on the keyboard while Wootility remains responsible for keyboard configuration and baseline profiles.
+
+## Core vocabulary
+
+- **Sources**: command output, GitHub, stock/market APIs, sports/racing APIs, calendars, local app context, audio, future analog input.
+- **Signal state**: normalized values such as running/success/failure, price up/down, score changed, PR needs review, meeting active.
+- **Rules**: logic mapping signal state to visual behavior.
+- **Scenes**: RGB outputs such as pulse, sweep, comet, bloom, alert, heatmap.
+- **Profiles**: named collections of sources, rules, and scenes.
 
 ## Command Pulse
 
-- Input: a local command such as `make check`, `cargo test`, or `npm test`.
-- Output: running sweep, green success hold, red failure hold, orange timeout, purple interrupt.
-- Status: first real extension target.
+- Source: local command such as `make check`, `cargo test`, or `npm test`.
+- State: pending, running, success, failure, timeout, interrupted.
+- Scene: running sweep, green success hold, red failure hold, orange timeout, purple interrupt.
+- Status: implemented first signal.
 - Risks: child process cancellation, output policy, timeout defaults.
+
+## GitHub / CI Beacon
+
+- Source: GitHub Actions, PR reviews, issues, Graphite stack state.
+- State: CI passing/failing/running, review requested, merge conflict, PR approved.
+- Scene: function-row CI status, navigation-zone review alerts, red conflict pulse.
+- Status: high-value next data integration after local command support.
+- Risks: auth, API rate limits, polling frequency, private repo handling.
+
+## Market Pulse
+
+- Source: stock/crypto/watchlist APIs.
+- State: market open/closed, ticker up/down, threshold crossed, volatility spike.
+- Scene: green/red directional wave, dim market-closed idle, yellow threshold flash.
+- Status: good proof of external API source abstraction.
+- Risks: API keys, delayed data, rate limits, avoiding distracting constant updates.
+
+## Sports / Racing Alerts
+
+- Source: sports score APIs, F1/racing schedule/results/telemetry-like feeds where available.
+- State: game started, team scored, lead changed, race session live, favorite driver event.
+- Scene: team-color burst, checkered-flag sweep, sector-color pulses.
+- Status: fun showcase integration.
+- Risks: API availability/cost, event deduplication, team/driver color config.
 
 ## Focus Cockpit
 
-- Input: local timer state: focus, break, overtime, meeting-safe dim mode.
-- Output: progress bar across function row or arrows; red pulse on overtime; gentle break sparkle.
-- Status: strong second extension candidate.
+- Source: local timer state: focus, break, overtime, meeting-safe dim mode.
+- State: phase, remaining time, overtime.
+- Scene: progress bar across function row or arrows; red overtime pulse; gentle break sparkle.
+- Status: strong productivity signal candidate.
 - Risks: continuous lifecycle, reset behavior, avoiding distraction.
-
-## Git Nebula
-
-- Input: local git dirty state, branch state, Graphite stack state, PR/CI provider status.
-- Output: small status zones for clean, dirty, ahead, failing, review, merge conflict.
-- Status: build after extension state/polling model settles.
-- Risks: provider API auth, polling frequency, avoiding noisy alerts.
 
 ## App Aura
 
-- Input: frontmost macOS application or manual profile switch.
-- Output: coding, terminal, meeting, gaming, late-night, and recording profiles.
+- Source: frontmost macOS application or manual profile switch.
+- State: IDE, terminal, meeting, game, recording, late-night.
+- Scene: app-specific ambient palette or scene.
 - Status: later platform-specific track.
 - Risks: macOS Accessibility/Automation permissions and portable fallback.
 
 ## Soundwave Desk Toy
 
-- Input: microphone or system audio levels.
-- Output: spectrum bars, bass pulses, ambient color wash.
+- Source: microphone or system audio levels.
+- State: volume, spectrum bands, bass pulse.
+- Scene: spectrum bars, bass pulses, ambient color wash.
 - Status: later wow-factor track.
 - Risks: audio permissions, CPU use, platform-specific audio capture.
 
 ## Analog Lava Lab
 
-- Input: Wooting analog key pressure via future `wooting-analog-sdk_dist` backend.
-- Output: pressure visualizer, typing heatmap, rapid-trigger trainer, analog game overlays.
+- Source: Wooting analog key pressure via future `wooting-analog-sdk_dist` backend.
+- State: pressed keys and pressure values.
+- Scene: pressure visualizer, typing heatmap, rapid-trigger trainer, analog game overlays.
 - Status: later Wooting-specific track after analog backend research.
 - Risks: SDK distribution, device permissions, HID-keycode-to-RGB-matrix mapping.
 
-## Extension point
+## Engine direction
 
-Extensions should feed small typed state snapshots into renderers. Rendering stays deterministic where possible: `state + tick + layout + palette + brightness -> Frame`. The runner owns polling, timing, cancellation, logging, keyboard lifecycle, and restore policy.
+Rendering should stay deterministic where possible: `state + tick + layout + palette + brightness -> Frame`. The runner owns polling, timing, cancellation, logging, keyboard lifecycle, and restore policy.

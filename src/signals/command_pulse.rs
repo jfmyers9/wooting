@@ -1,6 +1,6 @@
-use crate::extensions::KeyboardExtension;
 use crate::layout::Zone;
-use crate::render::{pulse_wave, Color, Frame, RenderContext};
+use crate::render::{Color, Frame, RenderContext, pulse_wave};
+use crate::signals::SignalProgram;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -38,7 +38,7 @@ pub enum CommandPulseError {
 }
 
 #[derive(Debug)]
-pub struct CommandPulseExtension {
+pub struct CommandPulseSignal {
     config: CommandPulseConfig,
     child: Option<Child>,
     state: CommandPulseState,
@@ -54,7 +54,7 @@ enum CommandPulseState {
     Interrupted { completed: Instant },
 }
 
-impl CommandPulseExtension {
+impl CommandPulseSignal {
     pub fn new(config: CommandPulseConfig) -> Result<Self, CommandPulseError> {
         if config.command.is_empty() {
             return Err(CommandPulseError::EmptyCommand);
@@ -160,7 +160,7 @@ impl CommandPulseExtension {
     }
 }
 
-impl KeyboardExtension for CommandPulseExtension {
+impl SignalProgram for CommandPulseSignal {
     fn tick(&mut self, interrupted: &AtomicBool) {
         match self.state {
             CommandPulseState::Pending => self.start(),
@@ -291,16 +291,16 @@ mod tests {
 
     #[test]
     fn command_pulse_rejects_empty_command() {
-        assert!(CommandPulseExtension::new(CommandPulseConfig::default()).is_err());
+        assert!(CommandPulseSignal::new(CommandPulseConfig::default()).is_err());
     }
 
     #[test]
     fn command_pulse_finishes_success() {
         let interrupted = AtomicBool::new(false);
-        let mut extension = CommandPulseExtension::new(config("true")).unwrap();
+        let mut signal = CommandPulseSignal::new(config("true")).unwrap();
         for _ in 0..100 {
-            extension.tick(&interrupted);
-            if extension.finished() {
+            signal.tick(&interrupted);
+            if signal.finished() {
                 return;
             }
             thread::sleep(Duration::from_millis(10));
@@ -312,8 +312,8 @@ mod tests {
     fn command_pulse_renders_full_frame() {
         let info = info();
         let layout = KeyboardLayout::for_device(&info);
-        let extension = CommandPulseExtension::new(config("true")).unwrap();
-        let frame = extension.render(&RenderContext {
+        let signal = CommandPulseSignal::new(config("true")).unwrap();
+        let frame = signal.render(&RenderContext {
             info: &info,
             layout: &layout,
             brightness: 96,

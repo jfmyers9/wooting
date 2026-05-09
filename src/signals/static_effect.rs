@@ -1,20 +1,20 @@
 use crate::effects::EffectKind;
-use crate::extensions::KeyboardExtension;
 use crate::render::{Frame, RenderContext};
+use crate::signals::SignalProgram;
 use std::sync::atomic::AtomicBool;
 
 #[derive(Clone, Debug)]
-pub struct StaticEffectExtension {
+pub struct StaticEffectSignal {
     effect: EffectKind,
 }
 
-impl StaticEffectExtension {
+impl StaticEffectSignal {
     pub fn new(effect: EffectKind) -> Self {
         Self { effect }
     }
 }
 
-impl KeyboardExtension for StaticEffectExtension {
+impl SignalProgram for StaticEffectSignal {
     fn tick(&mut self, _interrupted: &AtomicBool) {}
 
     fn render(&self, ctx: &RenderContext<'_>) -> Frame {

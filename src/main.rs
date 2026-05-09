@@ -1,19 +1,19 @@
 mod config;
 mod effects;
-mod extensions;
 mod layout;
 mod render;
 mod runner;
 mod sdk;
+mod signals;
 
 use clap::{Parser, Subcommand};
 use config::AppConfig;
 use effects::EffectKind;
-use extensions::{CommandPulseConfig, ExtensionKind, build_extension};
 use layout::KeyboardLayout;
 use render::{Color, PaletteName};
-use runner::{ExtensionRunOptions, RunOptions, run_effect, run_extension, sleep_interruptibly};
+use runner::{RunOptions, SignalRunOptions, run_effect, run_signal, sleep_interruptibly};
 use sdk::rgb::{DeviceInfo, WootingRgb};
+use signals::{CommandPulseConfig, SignalKind, build_signal};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -90,12 +90,13 @@ enum Command {
         #[arg(long, default_value_t = 30)]
         fps: u32,
     },
-    /// Run an extension directly.
-    Extension {
+    /// Run a signal directly.
+    #[command(alias = "extension")]
+    Signal {
         #[command(subcommand)]
-        command: ExtensionCommand,
+        command: SignalCommand,
     },
-    /// Run a TOML extension-host profile.
+    /// Run a TOML signals profile.
     Run {
         /// Config file path.
         #[arg(long)]
@@ -107,16 +108,16 @@ enum Command {
 }
 
 #[derive(Debug, Subcommand)]
-enum ExtensionCommand {
-    /// Run a named extension. Use `--` before command-pulse commands.
+enum SignalCommand {
+    /// Run a named signal. Use `--` before command-pulse commands.
     Run {
-        /// Extension to run.
+        /// Signal to run.
         #[arg(value_enum)]
-        extension: ExtensionKind,
-        /// Static effect used by the static-effect extension.
+        signal: SignalKind,
+        /// Static effect used by the static-effect signal.
         #[arg(long, value_enum, default_value_t = EffectKind::Comet)]
         effect: EffectKind,
-        /// Palette for extension renderers.
+        /// Palette for signal renderers.
         #[arg(long, value_enum, default_value_t = PaletteName::Wooting)]
         palette: PaletteName,
         /// Maximum RGB channel value.
@@ -213,9 +214,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             run_keyboard(cli.sdk_path, &options, &interrupted)?;
         }
-        Command::Extension { command } => match command {
-            ExtensionCommand::Run {
-                extension,
+        Command::Signal { command } => match command {
+            SignalCommand::Run {
+                signal,
                 effect,
                 palette,
                 brightness,
@@ -226,10 +227,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 failure_hold_seconds,
                 command,
             } => {
-                let (config, options) = match extension {
-                    ExtensionKind::StaticEffect => (
-                        extensions::ExtensionConfig::static_effect(effect),
-                        ExtensionRunOptions {
+                let (config, options) = match signal {
+                    SignalKind::StaticEffect => (
+                        signals::SignalConfig::static_effect(effect),
+                        SignalRunOptions {
                             palette,
                             brightness,
                             fps,
@@ -237,15 +238,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             continuous: false,
                         },
                     ),
-                    ExtensionKind::CommandPulse => (
-                        extensions::ExtensionConfig::command_pulse(CommandPulseConfig {
+                    SignalKind::CommandPulse => (
+                        signals::SignalConfig::command_pulse(CommandPulseConfig {
                             command,
                             timeout_seconds,
                             success_hold_seconds,
                             failure_hold_seconds,
                             ..CommandPulseConfig::default()
                         }),
-                        ExtensionRunOptions {
+                        SignalRunOptions {
                             palette,
                             brightness,
                             fps,
@@ -254,14 +255,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                     ),
                 };
-                let mut extension = build_extension(&config, effect)?;
-                run_keyboard_extension(
-                    cli.sdk_path,
-                    &options,
-                    &mut *extension,
-                    true,
-                    &interrupted,
-                )?;
+                let mut signal = build_signal(&config, effect)?;
+                run_keyboard_signal(cli.sdk_path, &options, &mut *signal, true, &interrupted)?;
             }
         },
         Command::Run { config, dry_run } => {
@@ -269,11 +264,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             print_config(&config);
             if !dry_run {
                 let sdk_path = cli.sdk_path.or(config.sdk_path.clone());
-                let mut extension = build_extension(&config.extension_config(), config.effect)?;
-                run_keyboard_extension(
+                let mut signal = build_signal(&config.signal_config(), config.effect)?;
+                run_keyboard_signal(
                     sdk_path,
-                    &config.extension_run_options(),
-                    &mut *extension,
+                    &config.signal_run_options(),
+                    &mut *signal,
                     config.warn_on_close_error,
                     &interrupted,
                 )?;
@@ -305,16 +300,16 @@ fn run_keyboard_with_close_policy(
     Ok(())
 }
 
-fn run_keyboard_extension(
+fn run_keyboard_signal(
     sdk_path: Option<PathBuf>,
-    options: &ExtensionRunOptions,
-    extension: &mut dyn extensions::KeyboardExtension,
+    options: &SignalRunOptions,
+    signal: &mut dyn signals::SignalProgram,
     warn_on_close_error: bool,
     interrupted: &AtomicBool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut keyboard = WootingRgb::open(sdk_path.as_deref())?;
     print_info(keyboard.info());
-    run_extension(&keyboard, options, extension, interrupted)?;
+    run_signal(&keyboard, options, signal, interrupted)?;
     close_best_effort(&mut keyboard, warn_on_close_error);
     Ok(())
 }
@@ -330,10 +325,10 @@ fn close_best_effort(keyboard: &mut WootingRgb, warn: bool) {
 }
 
 fn print_config(config: &AppConfig) {
-    let extension = config.extension_config();
+    let signal = config.signal_config();
     println!("config:");
     println!("  sdk_path: {}", path_display(config.sdk_path.as_ref()));
-    println!("  extension: {:?}", extension.kind);
+    println!("  signal: {:?}", signal.kind);
     println!("  effect: {}", config.effect);
     println!("  palette: {}", config.palette);
     println!("  brightness: {}", config.brightness);
@@ -341,11 +336,11 @@ fn print_config(config: &AppConfig) {
     println!("  seconds: {:?}", config.seconds);
     println!("  continuous: {}", config.continuous);
     println!("  warn_on_close_error: {}", config.warn_on_close_error);
-    if extension.kind == ExtensionKind::CommandPulse {
-        println!("  command: {:?}", extension.command_pulse.command);
+    if signal.kind == SignalKind::CommandPulse {
+        println!("  command: {:?}", signal.command_pulse.command);
         println!(
             "  timeout_seconds: {}",
-            extension.command_pulse.timeout_seconds
+            signal.command_pulse.timeout_seconds
         );
     }
 }

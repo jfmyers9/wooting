@@ -1,6 +1,5 @@
-# Example Wooting Extension Host static-effect profile.
-# Override sdk_path if the library is not in one of the default locations.
-# sdk_path = "external/wooting-rgb-sdk/mac/libwooting-rgb-sdk.dylib"
+# Compatibility example for the temporary wooting-extension name.
+# Prefer examples/wooting-signals.toml for new profiles.
 
 effect = "comet"
 palette = "cyberpunk"
@@ -10,6 +9,6 @@ seconds = 10
 continuous = false
 warn_on_close_error = true
 
-[extension]
+[signal]
 kind = "static-effect"
 effect = "comet"

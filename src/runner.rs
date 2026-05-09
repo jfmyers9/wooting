@@ -1,8 +1,8 @@
 use crate::effects::EffectKind;
-use crate::extensions::{KeyboardExtension, StaticEffectExtension};
 use crate::layout::KeyboardLayout;
 use crate::render::{PaletteName, RenderContext};
 use crate::sdk::rgb::WootingRgb;
+use crate::signals::{SignalProgram, StaticEffectSignal};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -31,7 +31,7 @@ impl Default for RunOptions {
 }
 
 #[derive(Clone, Debug)]
-pub struct ExtensionRunOptions {
+pub struct SignalRunOptions {
     pub palette: PaletteName,
     pub brightness: u8,
     pub fps: u32,
@@ -39,7 +39,7 @@ pub struct ExtensionRunOptions {
     pub continuous: bool,
 }
 
-impl Default for ExtensionRunOptions {
+impl Default for SignalRunOptions {
     fn default() -> Self {
         let run = RunOptions::default();
         Self {
@@ -52,7 +52,7 @@ impl Default for ExtensionRunOptions {
     }
 }
 
-impl From<&RunOptions> for ExtensionRunOptions {
+impl From<&RunOptions> for SignalRunOptions {
     fn from(options: &RunOptions) -> Self {
         Self {
             palette: options.palette,
@@ -69,19 +69,19 @@ pub fn run_effect(
     options: &RunOptions,
     interrupted: &AtomicBool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut extension = StaticEffectExtension::new(options.effect);
-    run_extension(
+    let mut signal = StaticEffectSignal::new(options.effect);
+    run_signal(
         keyboard,
-        &ExtensionRunOptions::from(options),
-        &mut extension,
+        &SignalRunOptions::from(options),
+        &mut signal,
         interrupted,
     )
 }
 
-pub fn run_extension(
+pub fn run_signal(
     keyboard: &WootingRgb,
-    options: &ExtensionRunOptions,
-    extension: &mut dyn KeyboardExtension,
+    options: &SignalRunOptions,
+    signal: &mut dyn SignalProgram,
     interrupted: &AtomicBool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let fps = options.fps.max(1);
@@ -94,12 +94,12 @@ pub fn run_extension(
     let mut tick = 0;
 
     while !interrupted.load(Ordering::SeqCst)
-        && !extension.finished()
+        && !signal.finished()
         && deadline.is_none_or(|deadline| Instant::now() < deadline)
     {
         let started = Instant::now();
-        extension.tick(interrupted);
-        let frame = extension.render(&RenderContext {
+        signal.tick(interrupted);
+        let frame = signal.render(&RenderContext {
             info: keyboard.info(),
             layout: &layout,
             brightness: options.brightness,
@@ -115,7 +115,7 @@ pub fn run_extension(
         }
     }
 
-    extension.shutdown(interrupted.load(Ordering::SeqCst));
+    signal.shutdown(interrupted.load(Ordering::SeqCst));
     Ok(())
 }
 

@@ -1,5 +1,4 @@
-# Compatibility example for the old wooting-hack name.
-# Prefer examples/wooting-signals.toml for new profiles.
+# Example Wooting Signals static-effect profile.
 # Override sdk_path if the library is not in one of the default locations.
 # sdk_path = "external/wooting-rgb-sdk/mac/libwooting-rgb-sdk.dylib"
 

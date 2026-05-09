@@ -1,7 +1,7 @@
 use crate::effects::EffectKind;
-use crate::extensions::ExtensionConfig;
 use crate::render::PaletteName;
-use crate::runner::{ExtensionRunOptions, RunOptions};
+use crate::runner::{RunOptions, SignalRunOptions};
+use crate::signals::SignalConfig;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
@@ -16,7 +16,8 @@ pub struct AppConfig {
     pub seconds: Option<u64>,
     pub continuous: bool,
     pub warn_on_close_error: bool,
-    pub extension: Option<ExtensionConfig>,
+    #[serde(alias = "extension")]
+    pub signal: Option<SignalConfig>,
 }
 
 impl Default for AppConfig {
@@ -31,7 +32,7 @@ impl Default for AppConfig {
             seconds: run.seconds,
             continuous: false,
             warn_on_close_error: true,
-            extension: None,
+            signal: None,
         }
     }
 }
@@ -45,8 +46,8 @@ impl AppConfig {
         toml::from_str(&content).map_err(ConfigError::Parse)
     }
 
-    pub fn extension_run_options(&self) -> ExtensionRunOptions {
-        ExtensionRunOptions {
+    pub fn signal_run_options(&self) -> SignalRunOptions {
+        SignalRunOptions {
             palette: self.palette,
             brightness: self.brightness,
             fps: self.fps,
@@ -55,10 +56,10 @@ impl AppConfig {
         }
     }
 
-    pub fn extension_config(&self) -> ExtensionConfig {
-        self.extension
+    pub fn signal_config(&self) -> SignalConfig {
+        self.signal
             .clone()
-            .unwrap_or_else(|| ExtensionConfig::static_effect(self.effect))
+            .unwrap_or_else(|| SignalConfig::static_effect(self.effect))
     }
 }
 

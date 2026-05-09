@@ -1,24 +1,40 @@
-# Wooting Extension Host
+# Wooting Signals
 
-Host-side extension runner for Wooting keyboards. It runs local extensions such as RGB effects, build/test status, focus timers, and future analog visualizers, then renders temporary keyboard experiences through Wooting SDK backends.
+Data-driven RGB automation for Wooting keyboards. Wooting Signals watches external signals — shell commands, GitHub, markets, sports, calendars, games, APIs — and maps them to programmable lighting strategies on your keyboard.
 
-The crate currently builds the `wooting-extension` binary. The older `wooting-hack` name is treated as a compatibility alias during migration.
+Current state: the first signal is **Command Pulse**, which turns build/test commands into running/success/failure RGB feedback. The renderer and runner are structured so future signals can share the same RGB backend, layouts, palettes, and cleanup behavior.
+
+The crate builds the `wooting-signals` binary. `wooting-extension` and `wooting-hack` are compatibility aliases during migration.
 
 ## Intended usage
 
-Use this as a local companion app, not as a Wootility replacement:
+Use this as a local RGB automation companion, not as a Wootility replacement:
 
-- inspect connected keyboard and inferred layout metadata
-- run RGB dev utilities and demo effects
-- run extension profiles from TOML
-- run direct extensions such as Command Pulse for build/test feedback
-- later, read analog key pressure through the Wooting Analog SDK distributable
+- Wootility configures firmware, key maps, actuation, rapid trigger, onboard profiles, and baseline lighting.
+- Wooting Signals temporarily paints host-side RGB overlays while it is running.
+- Signal profiles connect sources to lighting strategies: command status now; GitHub, stocks, racing/sports, timers, and analog pressure later.
+- Normal exit or Ctrl-C attempts to restore/reset lighting through the RGB SDK close path.
+
+## Mental model
+
+```text
+external source -> signal state -> lighting strategy -> RGB frame -> Wooting keyboard
+```
+
+Examples:
+
+- `make check` running -> cyan sweep
+- tests passed -> green bloom
+- GitHub Actions failed -> red alert zone
+- stock up/down -> green/red market pulse
+- favorite team scored -> team-color burst
+- future analog pressure -> per-key heatmap
 
 ## Wootility coexistence
 
-Wootility remains the source of truth for firmware, key mappings, actuation, rapid trigger, onboard profiles, and baseline lighting.
+Wootility remains the source of truth for keyboard configuration and baseline profiles. Wooting Signals does not register inside Wootility and is not a Wootility plugin.
 
-This extension host owns host-side RGB only while it is running. On normal exit or Ctrl-C it calls the RGB SDK close/reset path so the keyboard can return to its original lighting. If Wootility or Wootility Background Service is actively writing RGB at the same time, live RGB control is effectively last-writer-wins; do not expect both apps to own lighting simultaneously.
+If Wootility or Wootility Background Service is actively writing RGB while Wooting Signals is running, live RGB control is effectively last-writer-wins. For best results, configure the keyboard in Wootility, then run Wooting Signals when you want data-driven overlays.
 
 ## SDK contracts
 
@@ -36,8 +52,8 @@ Analog features should use `wooting-analog-sdk_dist` as an application dependenc
 
 - Start with moderate brightness (`--brightness 96`) and adjust per command.
 - Commands open a Wooting RGB session and try `wooting_rgb_close()` on normal exit.
-- Ctrl-C is handled during timed effects and extensions so the process attempts cleanup.
-- Long-running extension profiles should be opt-in and conservative.
+- Ctrl-C is handled during timed effects and signals so the process attempts cleanup.
+- Long-running signal profiles should be opt-in and conservative.
 
 ## Prerequisites
 
@@ -79,39 +95,39 @@ cargo run -- effect comet --palette cyberpunk --brightness 128 --seconds 10 --fp
 cargo run -- direct --row 0 --column 0 --brightness 96 --seconds 3
 ```
 
-## Extension commands
+## Signal commands
 
-Run the static-effect extension path:
+Run a static RGB scene through the signal runner:
 
 ```sh
-cargo run -- extension run static-effect --effect comet --palette cyberpunk --seconds 10
+cargo run -- signal run static-effect --effect comet --palette cyberpunk --seconds 10
 ```
 
 Run Command Pulse around a build/test command:
 
 ```sh
-cargo run -- extension run command-pulse --palette wooting -- make check
-cargo run -- extension run command-pulse --timeout-seconds 120 -- cargo test
+cargo run -- signal run command-pulse --palette wooting -- make check
+cargo run -- signal run command-pulse --timeout-seconds 120 -- cargo test
 ```
 
-Command Pulse renders a running animation, then a success/failure/timeout/interrupted hold before restoring through the RGB SDK close path.
+Compatibility: `extension run ...` remains accepted as an alias for now.
 
 ## Config runner
 
 Validate without touching the keyboard:
 
 ```sh
-cargo run -- run --config examples/wooting-extension.toml --dry-run
+cargo run -- run --config examples/wooting-signals.toml --dry-run
 cargo run -- run --config examples/command-pulse.toml --dry-run
 ```
 
 Run a profile:
 
 ```sh
-cargo run -- run --config examples/wooting-extension.toml
+cargo run -- run --config examples/wooting-signals.toml
 ```
 
-Example static-effect config:
+Example static scene config:
 
 ```toml
 effect = "comet"
@@ -122,7 +138,7 @@ seconds = 10
 continuous = false
 warn_on_close_error = true
 
-[extension]
+[signal]
 kind = "static-effect"
 effect = "comet"
 ```
@@ -136,12 +152,32 @@ fps = 30
 seconds = 0
 continuous = true
 
-[extension]
+[signal]
 kind = "command-pulse"
 command = ["make", "check"]
 timeout_seconds = 600
 success_hold_seconds = 3
 failure_hold_seconds = 6
+```
+
+## Future profile direction
+
+The current config selects one signal. The intended richer profile model is:
+
+```toml
+[[sources]]
+id = "ci"
+type = "github-actions"
+repo = "owner/repo"
+
+[[rules]]
+when = "ci.status == 'failed'"
+scene = "red-alert"
+
+[scenes.red-alert]
+effect = "pulse"
+palette = "heat"
+zones = ["function", "navigation"]
 ```
 
 ## Development
@@ -164,14 +200,14 @@ export WOOTING_RGB_SDK_PATH="$PWD/external/wooting-rgb-sdk/mac/libwooting-rgb-sd
 
 The workstation mode is intentionally conservative: scripts install files and generate a LaunchAgent, but the agent is not loaded unless you opt in.
 
-| Item                | Path                                                          |
-| ------------------- | ------------------------------------------------------------- |
-| Binary              | `~/.local/bin/wooting-extension`                              |
-| Compatibility alias | `~/.local/bin/wooting-hack`                                   |
-| Config              | `~/Library/Application Support/wooting-extension/config.toml` |
-| Log                 | `~/Library/Logs/wooting-extension.log`                        |
-| LaunchAgent         | `~/Library/LaunchAgents/com.jimmy.wooting-extension.plist`    |
-| SDK dylib           | repo `external/wooting-rgb-sdk/mac/libwooting-rgb-sdk.dylib`  |
+| Item                  | Path                                                          |
+| --------------------- | ------------------------------------------------------------- |
+| Binary                | `~/.local/bin/wooting-signals`                                |
+| Compatibility aliases | `~/.local/bin/wooting-extension`, `~/.local/bin/wooting-hack` |
+| Config                | `~/Library/Application Support/wooting-signals/config.toml`   |
+| Log                   | `~/Library/Logs/wooting-signals.log`                          |
+| LaunchAgent           | `~/Library/LaunchAgents/com.jimmy.wooting-signals.plist`      |
+| SDK dylib             | repo `external/wooting-rgb-sdk/mac/libwooting-rgb-sdk.dylib`  |
 
 Dry-run install:
 
@@ -188,9 +224,9 @@ scripts/install-macos.sh --apply
 After reviewing config, opt into LaunchAgent mode manually:
 
 ```sh
-launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.jimmy.wooting-extension.plist
-launchctl kickstart gui/$UID/com.jimmy.wooting-extension
-launchctl print gui/$UID/com.jimmy.wooting-extension
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.jimmy.wooting-signals.plist
+launchctl kickstart gui/$UID/com.jimmy.wooting-signals
+launchctl print gui/$UID/com.jimmy.wooting-signals
 ```
 
 Uninstall binary and LaunchAgent plist:
@@ -206,6 +242,6 @@ scripts/uninstall-macos.sh --apply
 - No lighting change: try a static test first, confirm SDK debug logs, and verify OS HID permissions.
 - Close/reset warning after an effect: the SDK did not acknowledge `wooting_rgb_close()`. The CLI has closed the handle; if lighting is not restored, rerun `cargo run -- info`, try a short `test`, or unplug/replug the keyboard.
 
-## Extension candidates
+## Signal candidates
 
-See [`docs/ideas.md`](docs/ideas.md) for Command Pulse, Focus Cockpit, Git Nebula, App Aura, Soundwave Desk Toy, and Analog Lava Lab.
+See [`docs/ideas.md`](docs/ideas.md) for Command Pulse, GitHub/CI, market, sports/racing, Focus Cockpit, App Aura, Soundwave Desk Toy, and Analog Lava Lab.
