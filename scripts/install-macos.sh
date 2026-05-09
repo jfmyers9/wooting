@@ -24,7 +24,8 @@ legacy_extension_config_dir="$HOME/Library/Application Support/wooting-extension
 legacy_hack_config_dir="$HOME/Library/Application Support/wooting-hack"
 config_dst="$config_dir/config.toml"
 log_path="$HOME/Library/Logs/wooting-signals.log"
-plist_path="$HOME/Library/LaunchAgents/com.jimmy.wooting-signals.plist"
+launch_agent_label="io.github.jfmyers9.wooting-signals"
+plist_path="$HOME/Library/LaunchAgents/$launch_agent_label.plist"
 legacy_extension_plist_path="$HOME/Library/LaunchAgents/com.jimmy.wooting-extension.plist"
 legacy_hack_plist_path="$HOME/Library/LaunchAgents/com.jimmy.wooting-hack.plist"
 sdk_path="$repo/external/wooting-rgb-sdk/mac/libwooting-rgb-sdk.dylib"
@@ -69,7 +70,7 @@ plist=$(
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.jimmy.wooting-signals</string>
+  <string>$launch_agent_label</string>
   <key>ProgramArguments</key>
   <array>
     <string>$binary_dst</string>
@@ -111,8 +112,8 @@ else
 LaunchAgent not loaded automatically.
 To opt in after reviewing config:
   launchctl bootstrap gui/\$UID "$plist_path"
-  launchctl kickstart gui/\$UID/com.jimmy.wooting-signals
-  launchctl print gui/\$UID/com.jimmy.wooting-signals
+  launchctl kickstart gui/\$UID/$launch_agent_label
+  launchctl print gui/\$UID/$launch_agent_label
 
 For a long-running Focus Cockpit profile, first review and copy:
   cp "$repo/examples/focus-cockpit.toml" "$config_dst"

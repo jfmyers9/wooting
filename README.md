@@ -242,14 +242,14 @@ Installed paths:
 | Binary      | `~/.local/bin/wooting-signals`                              |
 | Config      | `~/Library/Application Support/wooting-signals/config.toml` |
 | Log         | `~/Library/Logs/wooting-signals.log`                        |
-| LaunchAgent | `~/Library/LaunchAgents/com.jimmy.wooting-signals.plist`    |
+| LaunchAgent | `~/Library/LaunchAgents/io.github.jfmyers9.wooting-signals.plist` |
 
 After reviewing the config, opt into LaunchAgent mode manually:
 
 ```sh
-launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.jimmy.wooting-signals.plist
-launchctl kickstart gui/$UID/com.jimmy.wooting-signals
-launchctl print gui/$UID/com.jimmy.wooting-signals
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/io.github.jfmyers9.wooting-signals.plist
+launchctl kickstart gui/$UID/io.github.jfmyers9.wooting-signals
+launchctl print gui/$UID/io.github.jfmyers9.wooting-signals
 ```
 
 Uninstall binary and LaunchAgent plist:
