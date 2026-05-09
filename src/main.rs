@@ -336,6 +336,37 @@ fn print_config(config: &AppConfig) {
     println!("  seconds: {:?}", config.seconds);
     println!("  continuous: {}", config.continuous);
     println!("  warn_on_close_error: {}", config.warn_on_close_error);
+    if !config.sources.is_empty() {
+        println!("  sources: {}", config.sources.len());
+        for source in &config.sources {
+            println!("    {}: {:?}", source.id, source.kind);
+        }
+    }
+    if !config.rules.is_empty() {
+        println!("  rules: {}", config.rules.len());
+        for rule in &config.rules {
+            println!("    priority {} -> {}", rule.priority, rule.scene);
+        }
+    }
+    if !config.scenes.is_empty() {
+        println!("  scenes: {}", config.scenes.len());
+        for name in config.scenes.keys() {
+            println!("    {name}");
+        }
+    }
+    if !config.sources.is_empty() && !config.rules.is_empty() {
+        println!("  selected_scenes:");
+        for source in &config.sources {
+            for status in ["running", "success", "failure", "timeout", "interrupted"] {
+                if let Some(selected) = config.select_scene(&source.id, status) {
+                    println!(
+                        "    {}.{status}: {} (priority {}, effect {:?})",
+                        source.id, selected.name, selected.rule.priority, selected.scene.effect
+                    );
+                }
+            }
+        }
+    }
     if signal.kind == SignalKind::CommandPulse {
         println!("  command: {:?}", signal.command_pulse.command);
         println!(

@@ -73,6 +73,13 @@ pub enum SceneZone {
     System,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct SelectedScene<'a> {
+    pub name: &'a str,
+    pub rule: &'a RuleConfig,
+    pub scene: &'a SceneConfig,
+}
+
 impl SourceConfig {
     pub fn signal_config(&self, fallback_effect: EffectKind) -> Option<SignalConfig> {
         match self.kind {
@@ -84,6 +91,18 @@ impl SourceConfig {
             }
             SourceKind::GithubActions | SourceKind::GithubPullRequests => None,
         }
+    }
+}
+
+impl RuleConfig {
+    pub fn matches_status(&self, source_id: &str, status: &str) -> bool {
+        let compact = self
+            .when
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>();
+        compact == format!("{source_id}.status=='{status}'")
+            || compact == format!("{source_id}.status==\"{status}\"")
     }
 }
 
@@ -135,6 +154,29 @@ impl AppConfig {
             .iter()
             .find_map(|source| source.signal_config(self.effect))
             .unwrap_or_else(|| SignalConfig::static_effect(self.effect))
+    }
+
+    pub fn select_scene(&self, source_id: &str, status: &str) -> Option<SelectedScene<'_>> {
+        self.rules
+            .iter()
+            .enumerate()
+            .filter(|(_, rule)| rule.matches_status(source_id, status))
+            .filter_map(|(index, rule)| {
+                self.scenes
+                    .get_key_value(&rule.scene)
+                    .map(|(name, scene)| (index, name, rule, scene))
+            })
+            .max_by(|left, right| {
+                left.2
+                    .priority
+                    .cmp(&right.2.priority)
+                    .then_with(|| right.0.cmp(&left.0))
+            })
+            .map(|(_, name, rule, scene)| SelectedScene {
+                name: name.as_str(),
+                rule,
+                scene,
+            })
     }
 }
 
@@ -314,5 +356,81 @@ zones = ["function", "navigation"]
                 },
             )])
         );
+    }
+
+    #[test]
+    fn rule_matches_status_expressions() {
+        let rule = RuleConfig {
+            when: "tests.status == 'failure'".to_string(),
+            scene: "red-alert".to_string(),
+            ..RuleConfig::default()
+        };
+
+        assert!(rule.matches_status("tests", "failure"));
+        assert!(!rule.matches_status("tests", "success"));
+        assert!(!rule.matches_status("ci", "failure"));
+    }
+
+    #[test]
+    fn scene_selection_uses_highest_priority_matching_rule() {
+        let config: AppConfig = toml::from_str(
+            r#"
+[[rules]]
+when = "ci.status == 'failure'"
+scene = "ambient"
+priority = 0
+
+[[rules]]
+when = "ci.status == 'failure'"
+scene = "red-alert"
+priority = 100
+
+[scenes.ambient]
+effect = "breath"
+palette = "ocean"
+zones = ["alpha"]
+
+[scenes.red-alert]
+effect = "breath"
+palette = "heat"
+zones = ["function", "navigation"]
+"#,
+        )
+        .unwrap();
+
+        let selected = config.select_scene("ci", "failure").unwrap();
+
+        assert_eq!(selected.name, "red-alert");
+        assert_eq!(selected.rule.priority, 100);
+        assert_eq!(selected.scene.palette, Some(PaletteName::Heat));
+    }
+
+    #[test]
+    fn scene_selection_uses_declaration_order_for_priority_ties() {
+        let config: AppConfig = toml::from_str(
+            r#"
+[[rules]]
+when = "ci.status == 'running'"
+scene = "first"
+priority = 10
+
+[[rules]]
+when = "ci.status == 'running'"
+scene = "second"
+priority = 10
+
+[scenes.first]
+effect = "comet"
+
+[scenes.second]
+effect = "matrix"
+"#,
+        )
+        .unwrap();
+
+        let selected = config.select_scene("ci", "running").unwrap();
+
+        assert_eq!(selected.name, "first");
+        assert_eq!(selected.scene.effect, Some(EffectKind::Comet));
     }
 }

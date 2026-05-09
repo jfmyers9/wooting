@@ -160,25 +160,36 @@ success_hold_seconds = 3
 failure_hold_seconds = 6
 ```
 
-## Future profile direction
+## Profile v2 direction
 
-The current config selects one signal. The intended richer profile model is:
+The stable config path still accepts one `[signal]`. Profile v2 introduces typed `[[sources]]`, `[[rules]]`, and `[scenes]` sections so future integrations can share one routing model. Today, the runner executes the first runnable source while rules/scenes are parsed and validated for upcoming multi-source rendering.
+
+Validate the profile-v2 example without touching the keyboard:
+
+```sh
+cargo run -- run --config examples/profile-v2.toml --dry-run
+```
+
+Example profile-v2 shape:
 
 ```toml
 [[sources]]
-id = "ci"
-type = "github-actions"
-repo = "owner/repo"
+id = "checks"
+type = "command-pulse"
+command = ["make", "check"]
 
 [[rules]]
-when = "ci.status == 'failed'"
+when = "checks.status == 'failure'"
 scene = "red-alert"
+priority = 100
 
 [scenes.red-alert]
-effect = "pulse"
+effect = "breath"
 palette = "heat"
 zones = ["function", "navigation"]
 ```
+
+Dry-run output prints resolved source, rule, and scene names only. Future secret-bearing source configs must keep tokens in environment variables or redact them from dry-run/log output.
 
 ## Development
 

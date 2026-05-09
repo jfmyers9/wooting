@@ -1,0 +1,40 @@
+# Example profile-v2 config using sources, rules, and scenes.
+# The current runner executes the first runnable source while the profile
+# vocabulary is prepared for multi-source routing in future milestones.
+
+palette = "wooting"
+brightness = 128
+fps = 30
+seconds = 0
+continuous = true
+warn_on_close_error = true
+
+[[sources]]
+id = "checks"
+type = "command-pulse"
+command = ["make", "check"]
+timeout_seconds = 600
+success_hold_seconds = 3
+failure_hold_seconds = 6
+interrupted_hold_seconds = 2
+
+[[rules]]
+when = "checks.status == 'running'"
+scene = "checks-running"
+priority = 10
+
+[[rules]]
+when = "checks.status == 'failure'"
+scene = "checks-failed"
+priority = 100
+hold_seconds = 6
+
+[scenes.checks-running]
+effect = "comet"
+palette = "wooting"
+zones = ["function"]
+
+[scenes.checks-failed]
+effect = "breath"
+palette = "heat"
+zones = ["function", "navigation"]
