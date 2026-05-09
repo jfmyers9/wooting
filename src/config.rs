@@ -1,8 +1,9 @@
 use crate::effects::EffectKind;
 use crate::render::PaletteName;
 use crate::runner::{RunOptions, SignalRunOptions};
-use crate::signals::SignalConfig;
+use crate::signals::{CommandPulseConfig, SignalConfig};
 use serde::Deserialize;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Deserialize)]
@@ -18,6 +19,58 @@ pub struct AppConfig {
     pub warn_on_close_error: bool,
     #[serde(alias = "extension")]
     pub signal: Option<SignalConfig>,
+    pub sources: Vec<SourceConfig>,
+    pub rules: Vec<RuleConfig>,
+    pub scenes: BTreeMap<String, SceneConfig>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct SourceConfig {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: SourceKind,
+    pub effect: Option<EffectKind>,
+    #[serde(flatten)]
+    pub command_pulse: CommandPulseConfig,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum SourceKind {
+    #[default]
+    StaticEffect,
+    CommandPulse,
+    GithubActions,
+    GithubPullRequests,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct RuleConfig {
+    pub when: String,
+    pub scene: String,
+    pub priority: i32,
+    pub hold_seconds: Option<u64>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct SceneConfig {
+    pub effect: Option<EffectKind>,
+    pub palette: Option<PaletteName>,
+    pub brightness: Option<u8>,
+    pub zones: Vec<SceneZone>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum SceneZone {
+    Function,
+    Alpha,
+    Navigation,
+    Arrows,
+    System,
 }
 
 impl Default for AppConfig {
@@ -33,6 +86,9 @@ impl Default for AppConfig {
             continuous: false,
             warn_on_close_error: true,
             signal: None,
+            sources: Vec::new(),
+            rules: Vec::new(),
+            scenes: BTreeMap::new(),
         }
     }
 }
@@ -89,6 +145,9 @@ mod tests {
         assert!(!config.continuous);
         assert!(config.warn_on_close_error);
         assert_eq!(config.signal_config().kind, SignalKind::StaticEffect);
+        assert!(config.sources.is_empty());
+        assert!(config.rules.is_empty());
+        assert!(config.scenes.is_empty());
     }
 
     #[test]
@@ -133,5 +192,51 @@ command = ["true"]
         let error = toml::from_str::<AppConfig>("unexpected = true").unwrap_err();
 
         assert!(error.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn config_accepts_profile_v2_sections() {
+        let config: AppConfig = toml::from_str(
+            r#"
+[[sources]]
+id = "tests"
+type = "command-pulse"
+command = ["cargo", "test"]
+timeout_seconds = 120
+
+[[rules]]
+when = "tests.status == 'failure'"
+scene = "red-alert"
+priority = 100
+hold_seconds = 6
+
+[scenes.red-alert]
+effect = "breath"
+palette = "heat"
+brightness = 96
+zones = ["function", "navigation"]
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.sources.len(), 1);
+        assert_eq!(config.sources[0].id, "tests");
+        assert_eq!(config.sources[0].kind, SourceKind::CommandPulse);
+        assert_eq!(config.sources[0].command_pulse.command, ["cargo", "test"]);
+        assert_eq!(config.rules.len(), 1);
+        assert_eq!(config.rules[0].priority, 100);
+        assert_eq!(config.scenes.keys().collect::<Vec<_>>(), vec!["red-alert"]);
+        assert_eq!(
+            config.scenes,
+            BTreeMap::from([(
+                "red-alert".to_string(),
+                SceneConfig {
+                    effect: Some(EffectKind::Breath),
+                    palette: Some(PaletteName::Heat),
+                    brightness: Some(96),
+                    zones: vec![SceneZone::Function, SceneZone::Navigation],
+                },
+            )])
+        );
     }
 }

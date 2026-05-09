@@ -1,5 +1,5 @@
 use crate::layout::Zone;
-use crate::render::{pulse_wave, Color, Frame, RenderContext};
+use crate::render::{Color, Frame, RenderContext, pulse_wave};
 use crate::signals::SignalProgram;
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -7,7 +7,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(default)]
 pub struct CommandPulseConfig {
     pub command: Vec<String>,
