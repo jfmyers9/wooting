@@ -73,6 +73,20 @@ pub enum SceneZone {
     System,
 }
 
+impl SourceConfig {
+    pub fn signal_config(&self, fallback_effect: EffectKind) -> Option<SignalConfig> {
+        match self.kind {
+            SourceKind::StaticEffect => Some(SignalConfig::static_effect(
+                self.effect.unwrap_or(fallback_effect),
+            )),
+            SourceKind::CommandPulse => {
+                Some(SignalConfig::command_pulse(self.command_pulse.clone()))
+            }
+            SourceKind::GithubActions | SourceKind::GithubPullRequests => None,
+        }
+    }
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         let run = RunOptions::default();
@@ -113,8 +127,13 @@ impl AppConfig {
     }
 
     pub fn signal_config(&self) -> SignalConfig {
-        self.signal
-            .clone()
+        if let Some(signal) = &self.signal {
+            return signal.clone();
+        }
+
+        self.sources
+            .iter()
+            .find_map(|source| source.signal_config(self.effect))
             .unwrap_or_else(|| SignalConfig::static_effect(self.effect))
     }
 }
@@ -185,6 +204,63 @@ command = ["true"]
         let signal = config.signal_config();
         assert_eq!(signal.kind, SignalKind::CommandPulse);
         assert_eq!(signal.command_pulse.command, ["true"]);
+    }
+
+    #[test]
+    fn explicit_signal_takes_precedence_over_profile_sources() {
+        let config: AppConfig = toml::from_str(
+            r#"
+[signal]
+kind = "static-effect"
+effect = "matrix"
+
+[[sources]]
+id = "tests"
+type = "command-pulse"
+command = ["false"]
+"#,
+        )
+        .unwrap();
+
+        let signal = config.signal_config();
+        assert_eq!(signal.kind, SignalKind::StaticEffect);
+        assert_eq!(signal.effect, Some(EffectKind::Matrix));
+    }
+
+    #[test]
+    fn profile_source_builds_command_pulse_signal_config() {
+        let config: AppConfig = toml::from_str(
+            r#"
+[[sources]]
+id = "tests"
+type = "command-pulse"
+command = ["cargo", "test"]
+"#,
+        )
+        .unwrap();
+
+        let signal = config.signal_config();
+        assert_eq!(signal.kind, SignalKind::CommandPulse);
+        assert_eq!(signal.command_pulse.command, ["cargo", "test"]);
+    }
+
+    #[test]
+    fn profile_source_builds_static_effect_signal_config() {
+        let config: AppConfig = toml::from_str(
+            r#"
+effect = "rainbow"
+
+[[sources]]
+id = "ambient"
+type = "static-effect"
+effect = "breath"
+"#,
+        )
+        .unwrap();
+
+        let signal = config.signal_config();
+        assert_eq!(signal.kind, SignalKind::StaticEffect);
+        assert_eq!(signal.effect, Some(EffectKind::Breath));
     }
 
     #[test]
