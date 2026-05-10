@@ -1,6 +1,6 @@
 use crate::layout::Zone;
-use crate::render::{Color, Frame, RenderContext, pulse_wave};
-use crate::signals::SignalProgram;
+use crate::render::{pulse_wave, Color, Frame, RenderContext};
+use crate::signals::{SignalProgram, SignalSnapshot};
 use clap::ValueEnum;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -231,6 +231,27 @@ impl CommandPulseSignal {
             CommandPulseState::Interrupted { .. } => self.config.state_colors.interrupted,
         };
         Color::new(color[0], color[1], color[2])
+    }
+
+    pub fn snapshot(&self, source_id: &str) -> SignalSnapshot {
+        SignalSnapshot {
+            source_id: source_id.to_string(),
+            status: self.status_name().to_string(),
+            message: self.config.command.join(" "),
+            progress: None,
+            intensity: None,
+        }
+    }
+
+    fn status_name(&self) -> &'static str {
+        match self.state {
+            CommandPulseState::Pending => "pending",
+            CommandPulseState::Running { .. } => "running",
+            CommandPulseState::Success { .. } => "success",
+            CommandPulseState::Failure { .. } => "failure",
+            CommandPulseState::TimedOut { .. } => "timeout",
+            CommandPulseState::Interrupted { .. } => "interrupted",
+        }
     }
 
     fn terminal_status(&self) -> Option<(&'static str, Duration)> {

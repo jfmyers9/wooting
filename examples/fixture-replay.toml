@@ -1,0 +1,64 @@
+# Deterministic fixture/replay profile for previews, docs, and tests.
+# No keyboard, network, token, or child process is required in preview mode.
+
+palette = "wooting"
+brightness = 96
+fps = 12
+seconds = 0
+continuous = true
+warn_on_close_error = true
+
+[[sources]]
+id = "demo"
+type = "fixture-replay"
+loop_steps = true
+
+[[sources.steps]]
+status = "running"
+message = "demo running"
+progress = 0.25
+hold_ticks = 3
+
+[[sources.steps]]
+status = "failure"
+message = "demo failed"
+progress = 1.0
+intensity = 1.0
+hold_ticks = 3
+
+[[sources.steps]]
+status = "success"
+message = "demo recovered"
+progress = 1.0
+hold_ticks = 3
+
+[[rules]]
+when = "demo.status == 'running'"
+scene = "demo-running"
+priority = 10
+
+[[rules]]
+when = "demo.status == 'failure'"
+scene = "demo-failed"
+priority = 100
+hold_seconds = 3
+
+[[rules]]
+when = "demo.status == 'success'"
+scene = "demo-success"
+priority = 50
+hold_seconds = 2
+
+[scenes.demo-running]
+effect = "comet"
+palette = "wooting"
+zones = ["function"]
+
+[scenes.demo-failed]
+effect = "breath"
+palette = "heat"
+zones = ["function", "navigation"]
+
+[scenes.demo-success]
+palette = "terminal"
+zones = ["function", "alpha"]

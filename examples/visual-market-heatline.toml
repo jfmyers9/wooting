@@ -1,0 +1,58 @@
+# Showcase: market heatline using fixture status changes.
+
+palette = "heat"
+brightness = 80
+fps = 8
+seconds = 0
+continuous = true
+
+[[sources]]
+id = "market"
+type = "fixture-replay"
+loop_steps = true
+
+[[sources.steps]]
+status = "positive"
+message = "watchlist green"
+progress = 0.6
+hold_ticks = 4
+
+[[sources.steps]]
+status = "negative"
+message = "watchlist red"
+progress = 0.4
+hold_ticks = 4
+
+[[sources.steps]]
+status = "alert"
+message = "threshold crossed"
+progress = 1.0
+hold_ticks = 4
+
+[[rules]]
+when = "market.status == 'positive'"
+scene = "market-positive"
+priority = 20
+
+[[rules]]
+when = "market.status == 'negative'"
+scene = "market-negative"
+priority = 20
+
+[[rules]]
+when = "market.status == 'alert'"
+scene = "market-alert"
+priority = 100
+
+[scenes.market-positive]
+palette = "terminal"
+zones = ["function", "alpha"]
+
+[scenes.market-negative]
+palette = "heat"
+zones = ["function", "alpha"]
+
+[scenes.market-alert]
+effect = "breath"
+palette = "heat"
+zones = ["function", "navigation"]

@@ -1,7 +1,7 @@
 use crate::layout::Zone;
-use crate::render::{Color, Frame, RenderContext, pulse_wave};
+use crate::render::{pulse_wave, Color, Frame, RenderContext};
+use crate::signals::external::{fetch_json, ExternalPollState, ExternalSnapshot, ExternalStatus};
 use crate::signals::SignalProgram;
-use crate::signals::external::{ExternalPollState, ExternalSnapshot, ExternalStatus, fetch_json};
 use serde::Deserialize;
 use serde_json::Value;
 use std::sync::atomic::AtomicBool;

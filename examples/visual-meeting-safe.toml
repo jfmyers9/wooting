@@ -1,0 +1,43 @@
+# Showcase: meeting/recording safe mode with low-brightness zones.
+
+palette = "ocean"
+brightness = 48
+fps = 8
+seconds = 0
+continuous = true
+
+[[sources]]
+id = "presence"
+type = "fixture-replay"
+loop_steps = true
+
+[[sources.steps]]
+status = "meeting-safe"
+message = "meeting safe"
+hold_ticks = 5
+
+[[sources.steps]]
+status = "recording"
+message = "recording"
+hold_ticks = 5
+
+[[rules]]
+when = "presence.status == 'meeting-safe'"
+scene = "meeting-safe"
+priority = 50
+
+[[rules]]
+when = "presence.status == 'recording'"
+scene = "recording-alert"
+priority = 100
+
+[scenes.meeting-safe]
+palette = "ocean"
+brightness = 32
+zones = ["function"]
+
+[scenes.recording-alert]
+effect = "breath"
+palette = "heat"
+brightness = 64
+zones = ["function"]

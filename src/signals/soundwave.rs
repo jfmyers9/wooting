@@ -1,5 +1,5 @@
 use crate::layout::Zone;
-use crate::render::{Color, Frame, RenderContext, pulse_wave};
+use crate::render::{pulse_wave, Color, Frame, RenderContext};
 use crate::signals::SignalProgram;
 use serde::Deserialize;
 use std::sync::atomic::AtomicBool;

@@ -80,6 +80,11 @@ cargo run -- signal run static-effect --effect comet --palette cyberpunk --secon
 cargo run -- signal run focus-cockpit --focus-minutes 25 --break-minutes 5 --cycles 4 --dim
 cargo run -- signal run github-ci --repo owner/repo --branch main
 cargo run -- signal run app-aura --profile terminal --dim
+
+# Offline previews: no keyboard SDK, network, or token required.
+cargo run -- preview effect comet --ticks 3 --format ansi
+cargo run -- preview effect comet --ticks 3 --format json
+cargo run -- run --config examples/fixture-replay.toml --dry-run --preview --preview-format svg
 ```
 
 ## Run from a profile
@@ -93,6 +98,14 @@ cargo run -- run --config examples/wooting-signals.toml --dry-run
 cargo run -- run --config examples/command-pulse.toml --dry-run
 cargo run -- run --config examples/github-ci.toml --dry-run
 cargo run -- run --config examples/focus-cockpit.toml --dry-run
+```
+
+Preview profile frames without touching the keyboard:
+
+```sh
+cargo run -- run --config examples/fixture-replay.toml --dry-run --preview
+cargo run -- run --config examples/fixture-replay.toml --dry-run --preview --preview-format json
+cargo run -- run --config examples/fixture-replay.toml --dry-run --preview --preview-format svg > preview.svg
 ```
 
 Run a profile:
@@ -237,11 +250,11 @@ scripts/install-macos.sh --apply
 
 Installed paths:
 
-| Item        | Path                                                        |
-| ----------- | ----------------------------------------------------------- |
-| Binary      | `~/.local/bin/wooting-signals`                              |
-| Config      | `~/Library/Application Support/wooting-signals/config.toml` |
-| Log         | `~/Library/Logs/wooting-signals.log`                        |
+| Item        | Path                                                              |
+| ----------- | ----------------------------------------------------------------- |
+| Binary      | `~/.local/bin/wooting-signals`                                    |
+| Config      | `~/Library/Application Support/wooting-signals/config.toml`       |
+| Log         | `~/Library/Logs/wooting-signals.log`                              |
 | LaunchAgent | `~/Library/LaunchAgents/io.github.jfmyers9.wooting-signals.plist` |
 
 After reviewing the config, opt into LaunchAgent mode manually:
@@ -282,10 +295,23 @@ make run-effect
 make config-dry-run
 ```
 
-Profile v2 support is available for parsing and validation with typed `[[sources]]`, `[[rules]]`, and `[scenes]`; the runner currently executes the first runnable source.
+Profile v2 support is executable when a config uses typed `[[sources]]`, `[[rules]]`, and `[scenes]` without an overriding `[signal]`. Dry-run output prints `runtime: profile-v2` or `runtime: single-signal`.
 
 ```sh
 cargo run -- run --config examples/profile-v2.toml --dry-run
+cargo run -- run --config examples/profile-v2.toml --dry-run --preview --preview-format svg > profile-preview.svg
+```
+
+Showcase profiles are preview-safe and use fixture/replay sources:
+
+```sh
+cargo run -- run --config examples/visual-build-lane.toml --dry-run --preview
+cargo run -- run --config examples/visual-ci-stack.toml --dry-run --preview
+cargo run -- run --config examples/visual-focus-sprint.toml --dry-run --preview
+cargo run -- run --config examples/visual-market-heatline.toml --dry-run --preview
+cargo run -- run --config examples/visual-sports-burst.toml --dry-run --preview
+cargo run -- run --config examples/visual-meeting-safe.toml --dry-run --preview
+cargo run -- run --config examples/visual-app-aura.toml --dry-run --preview
 ```
 
 Compatibility aliases `wooting-extension` and `wooting-hack` are retained during migration, but `wooting-signals` is the primary binary name.

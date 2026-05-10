@@ -1,8 +1,11 @@
 mod config;
 mod effects;
 mod layout;
+mod preview;
+mod profile;
 mod render;
 mod runner;
+mod scenes;
 mod sdk;
 mod signals;
 
@@ -10,12 +13,14 @@ use clap::{Parser, Subcommand};
 use config::AppConfig;
 use effects::EffectKind;
 use layout::KeyboardLayout;
+use preview::PreviewFormat;
+use profile::ProfileRuntimeSignal;
 use render::{Color, PaletteName};
 use runner::{RunOptions, SignalRunOptions, run_effect, run_signal, sleep_interruptibly};
 use sdk::rgb::{DeviceInfo, WootingRgb};
 use signals::{
-    AppAuraConfig, CommandPulseConfig, CommandPulseOutput, FocusConfig, GitHubCiConfig,
-    MarketConfig, SignalKind, SoundwaveConfig, SportsConfig, build_signal,
+    AppAuraConfig, CommandPulseConfig, CommandPulseOutput, FixtureConfig, FocusConfig,
+    GitHubCiConfig, MarketConfig, SignalKind, SoundwaveConfig, SportsConfig, build_signal,
 };
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -101,6 +106,11 @@ enum Command {
         #[command(subcommand)]
         command: SignalCommand,
     },
+    /// Preview deterministic frames without opening the keyboard SDK.
+    Preview {
+        #[command(subcommand)]
+        command: PreviewCommand,
+    },
     /// Run a TOML signals profile.
     Run {
         /// Config file path.
@@ -109,6 +119,37 @@ enum Command {
         /// Print resolved config without touching the keyboard.
         #[arg(long)]
         dry_run: bool,
+        /// Render a preview without touching the keyboard.
+        #[arg(long)]
+        preview: bool,
+        /// Preview output format.
+        #[arg(long, value_enum, default_value_t = PreviewFormat::Ansi)]
+        preview_format: PreviewFormat,
+        /// Number of preview ticks to render.
+        #[arg(long, default_value_t = 3)]
+        preview_ticks: u32,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum PreviewCommand {
+    /// Preview a static effect.
+    Effect {
+        /// Effect to preview.
+        #[arg(value_enum)]
+        effect: EffectKind,
+        /// Palette for palette-aware effects.
+        #[arg(long, value_enum, default_value_t = PaletteName::Wooting)]
+        palette: PaletteName,
+        /// Maximum RGB channel value.
+        #[arg(long, default_value_t = 128)]
+        brightness: u8,
+        /// Number of ticks to render.
+        #[arg(long, default_value_t = 3)]
+        ticks: u32,
+        /// Preview output format.
+        #[arg(long, value_enum, default_value_t = PreviewFormat::Ansi)]
+        format: PreviewFormat,
     },
 }
 
@@ -303,6 +344,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             run_keyboard(cli.sdk_path, &options, &interrupted)?;
         }
+        Command::Preview { command } => match command {
+            PreviewCommand::Effect {
+                effect,
+                palette,
+                brightness,
+                ticks,
+                format,
+            } => {
+                preview::print_effect_preview(effect, palette, brightness, ticks, format);
+            }
+        },
         Command::Signal { command } => match command {
             SignalCommand::Run {
                 signal,
@@ -474,17 +526,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             continuous: true,
                         },
                     ),
+                    SignalKind::FixtureReplay => (
+                        signals::SignalConfig::fixture_replay(FixtureConfig::default()),
+                        SignalRunOptions {
+                            palette,
+                            brightness,
+                            fps,
+                            seconds: None,
+                            continuous: true,
+                        },
+                    ),
                 };
                 let mut signal = build_signal(&config, effect)?;
                 run_keyboard_signal(cli.sdk_path, &options, &mut *signal, true, &interrupted)?;
             }
         },
-        Command::Run { config, dry_run } => {
+        Command::Run {
+            config,
+            dry_run,
+            preview,
+            preview_format,
+            preview_ticks,
+        } => {
             let config = AppConfig::load(&config)?;
             print_config(&config);
-            if !dry_run {
+            if preview {
+                let mut signal = build_config_signal(&config)?;
+                preview::print_signal_preview(
+                    &mut *signal,
+                    &config.signal_run_options(),
+                    preview_ticks,
+                    preview_format,
+                );
+            } else if !dry_run {
                 let sdk_path = cli.sdk_path.or(config.sdk_path.clone());
-                let mut signal = build_signal(&config.signal_config(), config.effect)?;
+                let mut signal = build_config_signal(&config)?;
                 run_keyboard_signal(
                     sdk_path,
                     &config.signal_run_options(),
@@ -497,6 +573,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn build_config_signal(
+    config: &AppConfig,
+) -> Result<Box<dyn signals::SignalProgram>, Box<dyn std::error::Error>> {
+    if ProfileRuntimeSignal::is_profile_runtime_config(config) {
+        Ok(Box::new(ProfileRuntimeSignal::new(config.clone())?))
+    } else {
+        build_signal(&config.signal_config(), config.effect)
+    }
 }
 
 fn run_keyboard(
@@ -556,6 +642,14 @@ fn print_config(config: &AppConfig) {
     println!("  seconds: {:?}", config.seconds);
     println!("  continuous: {}", config.continuous);
     println!("  warn_on_close_error: {}", config.warn_on_close_error);
+    println!(
+        "  runtime: {}",
+        if ProfileRuntimeSignal::is_profile_runtime_config(config) {
+            "profile-v2"
+        } else {
+            "single-signal"
+        }
+    );
     if !config.sources.is_empty() {
         println!("  sources: {}", config.sources.len());
         for source in &config.sources {
@@ -673,6 +767,10 @@ fn print_config(config: &AppConfig) {
                 "  cpu_limit_percent: {}",
                 signal.soundwave.cpu_limit_percent
             );
+        }
+        SignalKind::FixtureReplay => {
+            println!("  fixture_steps: {}", signal.fixture.steps.len());
+            println!("  loop_steps: {}", signal.fixture.loop_steps);
         }
         SignalKind::StaticEffect => {}
     }

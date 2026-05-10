@@ -1,0 +1,56 @@
+# Showcase: CI stack status routed to the function/navigation zones.
+
+palette = "wooting"
+brightness = 88
+fps = 10
+seconds = 0
+continuous = true
+
+[[sources]]
+id = "ci"
+type = "fixture-replay"
+loop_steps = true
+
+[[sources.steps]]
+status = "running"
+message = "CI running"
+hold_ticks = 4
+
+[[sources.steps]]
+status = "review-requested"
+message = "review requested"
+hold_ticks = 4
+
+[[sources.steps]]
+status = "failure"
+message = "CI failed"
+hold_ticks = 4
+
+[[rules]]
+when = "ci.status == 'running'"
+scene = "ci-running"
+priority = 10
+
+[[rules]]
+when = "ci.status == 'review-requested'"
+scene = "ci-review"
+priority = 80
+
+[[rules]]
+when = "ci.status == 'failure'"
+scene = "ci-failed"
+priority = 100
+
+[scenes.ci-running]
+effect = "matrix"
+palette = "wooting"
+zones = ["function"]
+
+[scenes.ci-review]
+palette = "heat"
+zones = ["navigation", "arrows"]
+
+[scenes.ci-failed]
+effect = "breath"
+palette = "heat"
+zones = ["function", "navigation"]

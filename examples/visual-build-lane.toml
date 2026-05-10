@@ -1,0 +1,59 @@
+# Showcase: local build lane with progress, failure alert, and recovery.
+
+palette = "wooting"
+brightness = 96
+fps = 12
+seconds = 0
+continuous = true
+
+[[sources]]
+id = "build"
+type = "fixture-replay"
+loop_steps = true
+
+[[sources.steps]]
+status = "running"
+message = "build running"
+progress = 0.4
+hold_ticks = 4
+
+[[sources.steps]]
+status = "failure"
+message = "build failed"
+progress = 1.0
+hold_ticks = 4
+
+[[sources.steps]]
+status = "success"
+message = "build passed"
+progress = 1.0
+hold_ticks = 4
+
+[[rules]]
+when = "build.status == 'running'"
+scene = "lane-running"
+priority = 10
+
+[[rules]]
+when = "build.status == 'failure'"
+scene = "lane-failed"
+priority = 100
+
+[[rules]]
+when = "build.status == 'success'"
+scene = "lane-success"
+priority = 50
+
+[scenes.lane-running]
+effect = "comet"
+palette = "wooting"
+zones = ["function"]
+
+[scenes.lane-failed]
+effect = "breath"
+palette = "heat"
+zones = ["function", "navigation"]
+
+[scenes.lane-success]
+palette = "terminal"
+zones = ["function", "alpha"]

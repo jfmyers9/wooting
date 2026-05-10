@@ -1,0 +1,56 @@
+# Showcase: sports/racing burst with favorite-scored alert.
+
+palette = "cyberpunk"
+brightness = 100
+fps = 12
+seconds = 0
+continuous = true
+
+[[sources]]
+id = "sports"
+type = "fixture-replay"
+loop_steps = true
+
+[[sources.steps]]
+status = "running"
+message = "event live"
+hold_ticks = 4
+
+[[sources.steps]]
+status = "alert"
+message = "favorite scored"
+hold_ticks = 4
+
+[[sources.steps]]
+status = "positive"
+message = "favorite leading"
+hold_ticks = 4
+
+[[rules]]
+when = "sports.status == 'running'"
+scene = "sports-live"
+priority = 10
+
+[[rules]]
+when = "sports.status == 'alert'"
+scene = "sports-scored"
+priority = 100
+
+[[rules]]
+when = "sports.status == 'positive'"
+scene = "sports-leading"
+priority = 50
+
+[scenes.sports-live]
+effect = "comet"
+palette = "ocean"
+zones = ["function"]
+
+[scenes.sports-scored]
+effect = "breath"
+palette = "cyberpunk"
+zones = ["function", "navigation", "arrows"]
+
+[scenes.sports-leading]
+palette = "terminal"
+zones = ["function", "arrows"]

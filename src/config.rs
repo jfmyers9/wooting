@@ -2,8 +2,8 @@ use crate::effects::EffectKind;
 use crate::render::PaletteName;
 use crate::runner::{RunOptions, SignalRunOptions};
 use crate::signals::{
-    AppAuraConfig, CommandPulseConfig, FocusConfig, GitHubCiConfig, MarketConfig, SignalConfig,
-    SoundwaveConfig, SportsConfig,
+    AppAuraConfig, CommandPulseConfig, FixtureConfig, FocusConfig, GitHubCiConfig, MarketConfig,
+    SignalConfig, SoundwaveConfig, SportsConfig,
 };
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -48,6 +48,8 @@ pub struct SourceConfig {
     pub app_aura: AppAuraConfig,
     #[serde(flatten)]
     pub soundwave: SoundwaveConfig,
+    #[serde(flatten)]
+    pub fixture: FixtureConfig,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -63,6 +65,7 @@ pub enum SourceKind {
     SportsAlerts,
     AppAura,
     Soundwave,
+    FixtureReplay,
     GithubActions,
     GithubPullRequests,
 }
@@ -119,6 +122,7 @@ impl SourceConfig {
             SourceKind::SportsAlerts => Some(SignalConfig::sports_alerts(self.sports.clone())),
             SourceKind::AppAura => Some(SignalConfig::app_aura(self.app_aura.clone())),
             SourceKind::Soundwave => Some(SignalConfig::soundwave(self.soundwave.clone())),
+            SourceKind::FixtureReplay => Some(SignalConfig::fixture_replay(self.fixture.clone())),
         }
     }
 }
@@ -376,6 +380,30 @@ meeting_safe = true
         assert_eq!(signal.focus.break_minutes, 10);
         assert_eq!(signal.focus.cycles, 2);
         assert!(signal.focus.meeting_safe);
+    }
+
+    #[test]
+    fn profile_source_builds_fixture_replay_signal_config() {
+        let config: AppConfig = toml::from_str(
+            r#"
+[[sources]]
+id = "demo"
+type = "fixture-replay"
+loop_steps = false
+
+[[sources.steps]]
+status = "running"
+message = "demo running"
+hold_ticks = 1
+"#,
+        )
+        .unwrap();
+
+        let signal = config.signal_config();
+        assert_eq!(signal.kind, SignalKind::FixtureReplay);
+        assert_eq!(signal.fixture.steps.len(), 1);
+        assert_eq!(signal.fixture.steps[0].status, "running");
+        assert!(!signal.fixture.loop_steps);
     }
 
     #[test]

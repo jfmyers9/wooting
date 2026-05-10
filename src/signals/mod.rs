@@ -1,6 +1,7 @@
 pub mod app_aura;
 pub mod command_pulse;
 pub mod external;
+pub mod fixture;
 pub mod focus;
 pub mod github;
 pub mod market;
@@ -13,6 +14,7 @@ use crate::render::{Frame, RenderContext};
 pub use app_aura::{AppAuraConfig, AppAuraSignal};
 use clap::ValueEnum;
 pub use command_pulse::{CommandPulseConfig, CommandPulseOutput, CommandPulseSignal};
+pub use fixture::{FixtureConfig, FixtureSignal};
 pub use focus::{FocusConfig, FocusSignal};
 pub use github::{GitHubCiConfig, GitHubCiSignal};
 pub use market::{MarketConfig, MarketSignal};
@@ -27,6 +29,28 @@ pub trait SignalProgram {
     fn render(&self, ctx: &RenderContext<'_>) -> Frame;
     fn finished(&self) -> bool;
     fn shutdown(&mut self, interrupted: bool);
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SignalSnapshot {
+    pub source_id: String,
+    pub status: String,
+    pub message: String,
+    pub progress: Option<f32>,
+    pub intensity: Option<f32>,
+}
+
+impl SignalSnapshot {
+    pub fn status(source_id: &str, status: impl Into<String>) -> Self {
+        let status = status.into();
+        Self {
+            source_id: source_id.to_string(),
+            message: status.clone(),
+            status,
+            progress: None,
+            intensity: None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, ValueEnum)]
@@ -44,6 +68,7 @@ pub enum SignalKind {
     SportsAlerts,
     AppAura,
     Soundwave,
+    FixtureReplay,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -65,6 +90,8 @@ pub struct SignalConfig {
     pub app_aura: AppAuraConfig,
     #[serde(flatten)]
     pub soundwave: SoundwaveConfig,
+    #[serde(flatten)]
+    pub fixture: FixtureConfig,
 }
 
 impl Default for SignalConfig {
@@ -79,6 +106,7 @@ impl Default for SignalConfig {
             sports: SportsConfig::default(),
             app_aura: AppAuraConfig::default(),
             soundwave: SoundwaveConfig::default(),
+            fixture: FixtureConfig::default(),
         }
     }
 }
@@ -95,6 +123,7 @@ impl SignalConfig {
             sports: SportsConfig::default(),
             app_aura: AppAuraConfig::default(),
             soundwave: SoundwaveConfig::default(),
+            fixture: FixtureConfig::default(),
         }
     }
 
@@ -153,6 +182,13 @@ impl SignalConfig {
             ..Self::base(SignalKind::Soundwave)
         }
     }
+
+    pub fn fixture_replay(fixture: FixtureConfig) -> Self {
+        Self {
+            fixture,
+            ..Self::base(SignalKind::FixtureReplay)
+        }
+    }
 }
 
 pub fn build_signal(
@@ -172,5 +208,6 @@ pub fn build_signal(
         SignalKind::SportsAlerts => Ok(Box::new(SportsSignal::new(config.sports.clone()))),
         SignalKind::AppAura => Ok(Box::new(AppAuraSignal::new(config.app_aura.clone()))),
         SignalKind::Soundwave => Ok(Box::new(SoundwaveSignal::new(config.soundwave.clone()))),
+        SignalKind::FixtureReplay => Ok(Box::new(FixtureSignal::new(config.fixture.clone()))),
     }
 }

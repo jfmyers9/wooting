@@ -1,0 +1,55 @@
+# Showcase: ambient app aura transitions.
+
+palette = "wooting"
+brightness = 64
+fps = 8
+seconds = 0
+continuous = true
+
+[[sources]]
+id = "app"
+type = "fixture-replay"
+loop_steps = true
+
+[[sources.steps]]
+status = "terminal"
+message = "terminal"
+hold_ticks = 4
+
+[[sources.steps]]
+status = "focus"
+message = "IDE"
+hold_ticks = 4
+
+[[sources.steps]]
+status = "meeting"
+message = "meeting"
+hold_ticks = 4
+
+[[rules]]
+when = "app.status == 'terminal'"
+scene = "terminal-aura"
+priority = 10
+
+[[rules]]
+when = "app.status == 'focus'"
+scene = "ide-aura"
+priority = 10
+
+[[rules]]
+when = "app.status == 'meeting'"
+scene = "meeting-aura"
+priority = 50
+
+[scenes.terminal-aura]
+palette = "terminal"
+zones = ["alpha"]
+
+[scenes.ide-aura]
+palette = "wooting"
+zones = ["alpha"]
+
+[scenes.meeting-aura]
+palette = "ocean"
+brightness = 32
+zones = ["function"]

@@ -1,0 +1,58 @@
+# Showcase: focus sprint progress and overtime alert.
+
+palette = "wooting"
+brightness = 72
+fps = 10
+seconds = 0
+continuous = true
+
+[[sources]]
+id = "focus"
+type = "fixture-replay"
+loop_steps = true
+
+[[sources.steps]]
+status = "focus"
+message = "focus block"
+progress = 0.65
+hold_ticks = 5
+
+[[sources.steps]]
+status = "break"
+message = "break"
+progress = 0.35
+hold_ticks = 4
+
+[[sources.steps]]
+status = "overtime"
+message = "overtime"
+progress = 1.0
+hold_ticks = 4
+
+[[rules]]
+when = "focus.status == 'focus'"
+scene = "focus-progress"
+priority = 10
+
+[[rules]]
+when = "focus.status == 'break'"
+scene = "break-progress"
+priority = 20
+
+[[rules]]
+when = "focus.status == 'overtime'"
+scene = "overtime-alert"
+priority = 100
+
+[scenes.focus-progress]
+palette = "wooting"
+zones = ["function"]
+
+[scenes.break-progress]
+palette = "terminal"
+zones = ["function"]
+
+[scenes.overtime-alert]
+effect = "breath"
+palette = "heat"
+zones = ["alpha"]

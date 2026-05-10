@@ -17,6 +17,8 @@ pub struct Color {
 }
 
 impl Color {
+    pub const BLACK: Self = Self::new(0, 0, 0);
+
     pub const fn new(red: u8, green: u8, blue: u8) -> Self {
         Self { red, green, blue }
     }
@@ -65,6 +67,23 @@ impl Frame {
 
     pub fn set_coord(&mut self, coord: MatrixCoord, color: Color) {
         self.set(usize::from(coord.row), usize::from(coord.column), color);
+    }
+
+    pub fn get(&self, row: usize, column: usize) -> Color {
+        if row >= MAX_ROWS || column >= MAX_COLUMNS {
+            return Color::BLACK;
+        }
+
+        let offset = ((row * MAX_COLUMNS) + column) * RGB_CHANNELS;
+        Color::new(
+            self.bytes[offset],
+            self.bytes[offset + 1],
+            self.bytes[offset + 2],
+        )
+    }
+
+    pub fn get_coord(&self, coord: MatrixCoord) -> Color {
+        self.get(usize::from(coord.row), usize::from(coord.column))
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -199,6 +218,7 @@ mod tests {
         frame.set(0, MAX_COLUMNS, Color::new(0, 255, 0));
 
         assert!(frame.as_bytes().iter().all(|channel| *channel == 0));
+        assert_eq!(frame.get(MAX_ROWS, 0), Color::BLACK);
     }
 
     #[test]

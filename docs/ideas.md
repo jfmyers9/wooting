@@ -9,6 +9,8 @@ Wooting Signals is a data-driven RGB automation app for Wooting keyboards. A sig
 - **Rules**: logic mapping signal state to visual behavior.
 - **Scenes**: RGB outputs such as pulse, sweep, comet, bloom, alert, heatmap.
 - **Profiles**: named collections of sources, rules, and scenes.
+- **Preview**: deterministic ANSI, JSON, or SVG output generated without opening the keyboard SDK.
+- **Fixture/replay**: scripted source states for demos, tests, and visual reviews without network calls or child processes.
 
 ## Command Pulse
 
@@ -74,6 +76,19 @@ Wooting Signals is a data-driven RGB automation app for Wooting keyboards. A sig
 - Status: roadmap stub added in `src/sdk/analog.rs`; runtime signal deferred until SDK behavior and matrix mapping are validated.
 - Risks: SDK distribution, device permissions, concurrent RGB/analog access, and HID-keycode-to-RGB-matrix mapping.
 
+## Visualization platform iteration
+
+- Shared scene primitives now cover zone washes, progress bars, pulses, sweep trails, split fills, heatlines, and status colors.
+- Offline previews can render effects and profiles as ANSI blocks, JSON summaries, or SVG contact sheets.
+- Fixture/replay profiles make showcase states deterministic: build lane, CI stack, focus sprint, market heatline, sports burst, meeting/recording safe mode, and ambient app aura.
+- Profile v2 runtime executes `[[sources]]`, `[[rules]]`, and `[scenes]` when no legacy `[signal]` override is present.
+
+## Deferred sources
+
+- Calendar/meeting detection should reuse profile scenes and stay permission-aware.
+- System health and Graphite/Git stack sources should start as fixture-backed previews before live polling.
+- Frontmost app automation, real audio capture, and analog pressure visualizers remain explicit opt-in work because they involve OS permissions or SDK contention.
+
 ## Engine direction
 
-Rendering should stay deterministic where possible: `state + tick + layout + palette + brightness -> Frame`. The runner owns polling, timing, cancellation, logging, keyboard lifecycle, and restore policy.
+Rendering should stay deterministic where possible: `state + tick + layout + palette + brightness -> Frame`. The runner owns polling, timing, cancellation, logging, keyboard lifecycle, and restore policy. Profile runtime owns source snapshots, rule matching, scene priority, and zone-scoped composition.

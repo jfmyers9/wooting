@@ -128,9 +128,7 @@ fn breath(ctx: &RenderContext<'_>) -> Frame {
     let brightness = ((u16::from(ctx.brightness) * u16::from(phase)) / 255) as u8;
     let color = palette.sample(ctx.tick / 96).scale(brightness);
 
-    for key in ctx.layout.keys() {
-        frame.set_coord(key.coord, color);
-    }
+    crate::scenes::fill(&mut frame, ctx.layout, color);
 
     frame
 }
@@ -165,7 +163,7 @@ fn scale_down(a: u8, b: u8) -> u8 {
 mod tests {
     use super::*;
     use crate::layout::KeyboardLayout;
-    use crate::render::{FRAME_BYTES, RenderContext};
+    use crate::render::{RenderContext, FRAME_BYTES};
     use crate::sdk::rgb::{DeviceInfo, DeviceType, Layout};
 
     fn info(rows: u8, columns: u8) -> DeviceInfo {
